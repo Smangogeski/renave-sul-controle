@@ -5,17 +5,24 @@ const App = {
     currentView: 'dashboard',
 
     async init() {
-        // Pular login
+        console.log('🚀 Iniciando App Original (Cloud Mode)...');
+        
+        // Forçar exibição do container
         const loginScreen = document.getElementById('login-screen');
         const appContainer = document.querySelector('.app-container');
         if (loginScreen) loginScreen.style.display = 'none';
         if (appContainer) appContainer.style.display = 'flex';
 
-        // Aguardar dados da nuvem
-        await Store.init();
-        
         this.cacheDOM();
         this.bindEvents();
+
+        // Tentar carregar dados, mas não travar se falhar
+        try {
+            await Store.init();
+        } catch(e) {
+            console.warn('Falha ao carregar Store, iniciando modo offline.');
+        }
+        
         this.render();
         lucide.createIcons();
     },
