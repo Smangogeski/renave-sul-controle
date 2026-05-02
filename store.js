@@ -1,67 +1,80 @@
 /**
- * Store logic for Renave Sul
- * Handles persistence with localStorage
+ * Store logic for Renave Sul - Supabase Edition
+ * Handles communication with the Supabase Cloud Database
  */
+
+// CONFIGURAÇÃO SUPABASE
+const SUPABASE_URL = 'https://vlvngvhrfydtejbjfbrn.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZsdm5ndmhyZnlkdGVqYmpmYnJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3MzcwMDUsImV4cCI6MjA5MzMxMzAwNX0.DpbF_oC0xne36qc4t_XZ8WfMuOfjK9vqRL_65DVcMOE';
+
+const supabase = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+
 const Store = {
-    KEYS: {
-        TASKS: 'renave_v2_tasks',
-        CLIENTS: 'renave_v2_clients',
-        APPOINTMENTS: 'renave_v2_appointments',
-        REGISTRATIONS: 'renave_v2_registrations',
-        TRANSACTIONS: 'renave_v2_transactions',
-        SETTINGS: 'renave_v2_settings'
+    // Tabelas no Supabase
+    TABLES: {
+        TASKS: 'tasks',
+        CLIENTS: 'clients',
+        REGISTRATIONS: 'registrations',
+        TRANSACTIONS: 'transactions'
     },
 
-    // Initialize with empty data
-    init() {
-        // Se quiser forçar a limpeza dos dados fictícios antigos, descomente a linha abaixo uma vez:
-        // localStorage.clear(); 
-
-        if (!localStorage.getItem(this.KEYS.TASKS)) {
-            this.save(this.KEYS.TASKS, []);
+    async init() {
+        if (!supabase) {
+            console.error('Supabase não foi carregado corretamente.');
+            return;
         }
-        if (!localStorage.getItem(this.KEYS.CLIENTS)) {
-            this.save(this.KEYS.CLIENTS, []);
+        console.log('Sistema conectado ao Supabase Cloud.');
+    },
+
+    // Buscar todos os registros (Asíncrono)
+    async get(table) {
+        const { data, error } = await supabase
+            .from(table)
+            .select('*')
+            .order('created_at', { ascending: false });
+        
+        if (error) {
+            console.error(`Erro ao buscar ${table}:`, error);
+            return [];
         }
-        if (!localStorage.getItem(this.KEYS.APPOINTMENTS)) {
-            this.save(this.KEYS.APPOINTMENTS, []);
+        return data;
+    },
+
+    // Adicionar novo registro
+    async addItem(table, item) {
+        const { data, error } = await supabase
+            .from(table)
+            .insert([item])
+            .select();
+
+        if (error) {
+            console.error(`Erro ao adicionar em ${table}:`, error);
+            return null;
         }
-        if (!localStorage.getItem(this.KEYS.TRANSACTIONS)) {
-            this.save(this.KEYS.TRANSACTIONS, []);
+        return data[0];
+    },
+
+    // Atualizar registro existente
+    async updateItem(table, id, updates) {
+        const { error } = await supabase
+            .from(table)
+            .update(updates)
+            .eq('id', id);
+
+        if (error) {
+            console.error(`Erro ao atualizar ${table}:`, error);
         }
-        if (!localStorage.getItem(this.KEYS.REGISTRATIONS)) {
-            this.save(this.KEYS.REGISTRATIONS, []);
+    },
+
+    // Deletar registro
+    async deleteItem(table, id) {
+        const { error } = await supabase
+            .from(table)
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            console.error(`Erro ao deletar de ${table}:`, error);
         }
-    },
-
-    get(key) {
-        const data = localStorage.getItem(key);
-        return data ? JSON.parse(data) : [];
-    },
-
-    save(key, data) {
-        localStorage.setItem(key, JSON.stringify(data));
-    },
-
-    addItem(key, item) {
-        const data = this.get(key);
-        item.id = Date.now();
-        data.push(item);
-        this.save(key, data);
-        return item;
-    },
-
-    updateItem(key, id, updates) {
-        let data = this.get(key);
-        data = data.map(item => item.id === id ? { ...item, ...updates } : item);
-        this.save(key, data);
-    },
-
-    deleteItem(key, id) {
-        let data = this.get(key);
-        data = data.filter(item => item.id !== id);
-        this.save(key, data);
     }
 };
-
-Store.init();

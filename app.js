@@ -4,12 +4,12 @@
 const App = {
     currentView: 'dashboard',
 
-    init() {
+    async init() {
         this.checkAuth();
-        Store.init();
+        await Store.init();
         this.cacheDOM();
         this.bindEvents();
-        this.render();
+        await this.render();
         lucide.createIcons();
     },
 
@@ -188,23 +188,23 @@ const App = {
         });
     },
 
-    renderFinance() {
-        const transactions = Store.get(Store.KEYS.TRANSACTIONS);
-        const regs = Store.get(Store.KEYS.REGISTRATIONS);
+    async renderFinance() {
+        const transactions = await Store.get(Store.TABLES.TRANSACTIONS);
+        const regs = await Store.get(Store.TABLES.REGISTRATIONS);
         
         // Cálculos
-        const totalRevenue = transactions.filter(t => t.type === 'entry').reduce((acc, t) => acc + t.value, 0);
-        const totalExpenses = transactions.filter(t => t.type === 'exit').reduce((acc, t) => acc + Math.abs(t.value), 0);
+        const totalRevenue = transactions.filter(t => t.type === 'entry').reduce((acc, t) => acc + parseFloat(t.value), 0);
+        const totalExpenses = transactions.filter(t => t.type === 'exit').reduce((acc, t) => acc + Math.abs(parseFloat(t.value)), 0);
         const cashFlow = totalRevenue - totalExpenses;
         const averageTicket = regs.length > 0 ? (totalRevenue / regs.length).toFixed(2) : 0;
 
         // Cálculo por Cliente
         const clientStats = regs.map(reg => {
-            const clientTransactions = transactions.filter(t => t.storeId === reg.id && t.type === 'entry');
-            const revenue = clientTransactions.reduce((acc, t) => acc + t.value, 0);
+            const clientTransactions = transactions.filter(t => t.store_id == reg.id && t.type === 'entry');
+            const revenue = clientTransactions.reduce((acc, t) => acc + parseFloat(t.value), 0);
             const count = clientTransactions.length;
             const avg = count > 0 ? (revenue / count).toFixed(2) : 0;
-            return { name: reg.storeName, revenue, count, avg };
+            return { name: reg.store_name, revenue, count, avg };
         }).sort((a, b) => b.revenue - a.revenue);
 
         this.viewContainer.innerHTML = `
@@ -278,9 +278,9 @@ const App = {
                             ${transactions.map(t => `
                                 <tr>
                                     <td>${t.date}</td>
-                                    <td>${t.desc}</td>
+                                    <td>${t.description}</td>
                                     <td align="right" style="font-weight: 700; color: ${t.type === 'entry' ? 'var(--success)' : 'var(--danger)'}">
-                                        ${t.type === 'entry' ? '+' : '-'} R$ ${Math.abs(t.value).toLocaleString('pt-br')}
+                                        ${t.type === 'entry' ? '+' : '-'} R$ ${Math.abs(parseFloat(t.value)).toLocaleString('pt-br')}
                                     </td>
                                 </tr>
                             `).reverse().slice(0, 5).join('')}
@@ -511,26 +511,26 @@ const App = {
         this.showToast(checked ? 'Loja Ativada na Renave' : 'Loja Inativada na Renave');
     },
 
-    render() {
-        this.viewContainer.innerHTML = '';
+    async render() {
+        this.viewContainer.innerHTML = '<div style="display:flex; justify-content:center; padding: 2rem; color: var(--accent-primary);">Carregando dados da nuvem...</div>';
         
         switch (this.currentView) {
             case 'dashboard':
-                this.renderDashboard();
+                await this.renderDashboard();
                 // Initialize chart after DOM is updated
                 setTimeout(() => App.initDashboardChart(), 0);
                 break;
             case 'tasks':
-                this.renderTasks();
+                await this.renderTasks();
                 break;
             case 'finance':
-                this.renderFinance();
+                await this.renderFinance();
                 break;
             case 'clients':
-                this.renderClients();
+                await this.renderClients();
                 break;
             case 'registrations':
-                this.renderRegistrations();
+                await this.renderRegistrations();
                 break;
         }
         
@@ -545,17 +545,14 @@ const App = {
 
     // --- Renderers ---
 
-    renderDashboard() {
-        const tasks = Store.get(Store.KEYS.TASKS);
-        const appointments = Store.get(Store.KEYS.APPOINTMENTS);
-        const regs = Store.get(Store.KEYS.REGISTRATIONS);
+    async renderDashboard() {
+        const tasks = await Store.get(Store.TABLES.TASKS);
+        const regs = await Store.get(Store.TABLES.REGISTRATIONS);
+        const transactions = await Store.get(Store.TABLES.TRANSACTIONS);
 
         const pendingTasks = tasks.filter(t => t.status === 'pendente').length;
         const overdueTasks = tasks.filter(t => new Date(t.deadline) < new Date() && t.status !== 'concluido').length;
-        const todayAppointments = appointments.length;
-
-        // Cálculo de Processos em Andamento (Cadastros)
-        // Consideramos em andamento qualquer loja que não esteja com as 3 etapas concluídas
+        
         const ongoingRegistrations = regs.filter(r => 
             r.serpro !== 'concluido' || r.detran !== 'concluido' || r.renave !== 'concluido'
         ).length;
@@ -580,9 +577,9 @@ const App = {
                     <span class="trend down"><i data-lucide="alert-triangle"></i> Requer atenção</span>
                 </div>
                 <div class="kpi-card">
-                    <span class="label">Visitas Hoje</span>
-                    <span class="value">${todayAppointments}</span>
-                    <span class="trend" style="color: var(--accent-primary);"><i data-lucide="calendar"></i> Agendado</span>
+                    <span class="label">Total de Clientes</span>
+                    <span class="value">${regs.length}</span>
+                    <span class="trend" style="color: var(--accent-primary);"><i data-lucide="users"></i> Na base</span>
                 </div>
                 <div class="kpi-card">
                     <span class="label">Cadastros em Andamento</span>
@@ -625,11 +622,11 @@ const App = {
         `;
     },
 
-    initDashboardChart() {
+    async initDashboardChart() {
         const ctx = document.getElementById('monthlyChart');
         if (!ctx) return;
 
-        const regs = Store.get(Store.KEYS.REGISTRATIONS);
+        const regs = await Store.get(Store.TABLES.REGISTRATIONS);
         const history = App.getMonthlyHistory(regs);
         
         new Chart(ctx, {
@@ -685,8 +682,8 @@ const App = {
         });
     },
 
-    renderTasks() {
-        const tasks = Store.get(Store.KEYS.TASKS);
+    async renderTasks() {
+        const tasks = await Store.get(Store.TABLES.TASKS);
         this.viewContainer.innerHTML = `
             <div class="section-header">
                 <h1>Gestão de Tarefas</h1>
@@ -740,7 +737,6 @@ const App = {
                     <label>O que você quer adicionar?</label>
                     <select class="form-control" id="quick-type">
                         <option value="task">Tarefa</option>
-                        <option value="appointment">Compromisso</option>
                         <option value="client">Cliente</option>
                     </select>
                 </div>
@@ -754,26 +750,72 @@ const App = {
         
         this.showModal();
         
-        document.getElementById('quick-add-form').onsubmit = (e) => {
+        document.getElementById('quick-add-form').onsubmit = async (e) => {
             e.preventDefault();
             const type = document.getElementById('quick-type').value;
             const title = document.getElementById('quick-title').value;
             
             if (type === 'task') {
-                Store.addItem(Store.KEYS.TASKS, {
+                await Store.addItem(Store.TABLES.TASKS, {
                     title,
-                    desc: '',
                     priority: 'media',
                     deadline: new Date().toISOString().split('T')[0],
                     responsible: 'Gestor',
                     status: 'pendente'
                 });
+            } else if (type === 'client') {
+                await Store.addItem(Store.TABLES.CLIENTS, {
+                    name: title,
+                    email: '',
+                    phone: ''
+                });
             }
             
             App.hideModal();
-            App.render();
+            await App.render();
             App.showToast('Registro adicionado com sucesso!');
         };
+    },
+
+    showAddClient() {
+        this.modalTitle.innerText = 'Novo Cliente';
+        this.modalBody.innerHTML = `
+            <form id="add-client-form">
+                <div class="form-group">
+                    <label>Nome Completo</label>
+                    <input type="text" class="form-control" id="client-name" required>
+                </div>
+                <div class="form-group">
+                    <label>E-mail</label>
+                    <input type="email" class="form-control" id="client-email">
+                </div>
+                <div class="form-group">
+                    <label>Telefone</label>
+                    <input type="text" class="form-control" id="client-phone">
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%">Salvar Cliente</button>
+            </form>
+        `;
+        this.showModal();
+        document.getElementById('add-client-form').onsubmit = async (e) => {
+            e.preventDefault();
+            await Store.addItem(Store.TABLES.CLIENTS, {
+                name: document.getElementById('client-name').value,
+                email: document.getElementById('client-email').value,
+                phone: document.getElementById('client-phone').value
+            });
+            App.hideModal();
+            await App.render();
+            App.showToast('Cliente cadastrado!');
+        };
+    },
+
+    async deleteClient(id) {
+        if (confirm('Excluir este cliente?')) {
+            await Store.deleteItem(Store.TABLES.CLIENTS, id);
+            await this.render();
+            this.showToast('Cliente removido');
+        }
     },
 
     showModal() {
@@ -825,9 +867,9 @@ const App = {
             </form>
         `;
         this.showModal();
-        document.getElementById('add-task-form').onsubmit = (e) => {
+        document.getElementById('add-task-form').onsubmit = async (e) => {
             e.preventDefault();
-            Store.addItem(Store.KEYS.TASKS, {
+            await Store.addItem(Store.TABLES.TASKS, {
                 title: document.getElementById('task-title').value,
                 responsible: document.getElementById('task-responsible').value,
                 deadline: document.getElementById('task-deadline').value,
@@ -835,13 +877,13 @@ const App = {
                 status: 'pendente'
             });
             App.hideModal();
-            App.render();
-            App.showToast('Tarefa criada!');
+            await App.render();
+            App.showToast('Tarefa criada no banco!');
         };
     },
 
-    showEditTask(id) {
-        const tasks = Store.get(Store.KEYS.TASKS);
+    async showEditTask(id) {
+        const tasks = await Store.get(Store.TABLES.TASKS);
         const task = tasks.find(t => t.id === id);
         if (!task) return;
 
@@ -889,41 +931,37 @@ const App = {
         `;
         this.showModal();
 
-        document.getElementById('edit-task-form').onsubmit = (e) => {
+        document.getElementById('edit-task-form').onsubmit = async (e) => {
             e.preventDefault();
-            const updatedTasks = Store.get(Store.KEYS.TASKS);
-            const index = updatedTasks.findIndex(t => t.id === id);
-            
-            updatedTasks[index] = {
-                ...updatedTasks[index],
+            await Store.updateItem(Store.TABLES.TASKS, id, {
                 title: document.getElementById('edit-task-title').value,
                 responsible: document.getElementById('edit-task-resp').value,
                 deadline: document.getElementById('edit-task-deadline').value,
                 priority: document.getElementById('edit-task-priority').value,
                 status: document.getElementById('edit-task-status').value
-            };
+            });
             
-            Store.save(Store.KEYS.TASKS, updatedTasks);
             App.hideModal();
-            App.render();
-            App.showToast('Tarefa atualizada!');
+            await App.render();
+            App.showToast('Tarefa atualizada na nuvem!');
         };
     },
 
-    deleteTask(id) {
+    async deleteTask(id) {
         if (confirm('Deseja excluir esta tarefa?')) {
-            Store.deleteItem(Store.KEYS.TASKS, id);
-            this.render();
+            await Store.deleteItem(Store.TABLES.TASKS, id);
+            await this.render();
             this.showToast('Tarefa excluída');
         }
     },
 
-    updateAlertCount() {
-        const overdue = Store.get(Store.KEYS.TASKS).filter(t => new Date(t.deadline) < new Date() && t.status !== 'concluido').length;
+    async updateAlertCount() {
+        const tasks = await Store.get(Store.TABLES.TASKS);
+        const overdue = tasks.filter(t => new Date(t.deadline) < new Date() && t.status !== 'concluido').length;
         this.alertBadge.innerText = overdue;
     },
 
-    showAddRegistration() {
+    async showAddRegistration() {
         this.modalTitle.innerText = 'Novo Cadastro de Loja';
         this.modalBody.innerHTML = `
             <form id="add-reg-form">
@@ -949,45 +987,95 @@ const App = {
             </form>
         `;
         this.showModal();
-        document.getElementById('add-reg-form').onsubmit = (e) => {
+        document.getElementById('add-reg-form').onsubmit = async (e) => {
             e.preventDefault();
-            Store.addItem(Store.KEYS.REGISTRATIONS, {
-                storeName: document.getElementById('reg-store-name').value,
-                revCode: document.getElementById('reg-rev').value || 'REV',
-                createdAt: new Date().toISOString(),
-                detranPassword: document.getElementById('reg-detran-pass').value,
-                serproPassword: document.getElementById('reg-serpro-pass').value,
+            await Store.addItem(Store.TABLES.REGISTRATIONS, {
+                store_name: document.getElementById('reg-store-name').value,
+                rev_code: document.getElementById('reg-rev').value || 'REV',
+                detran_password: document.getElementById('reg-detran-pass').value,
+                serpro_password: document.getElementById('reg-serpro-pass').value,
                 serpro: 'nao-iniciada',
                 detran: 'nao-iniciada',
                 renave: 'nao-iniciada'
             });
             App.hideModal();
-            App.render();
-            App.showToast('Loja adicionada ao fluxo!');
+            await App.render();
+            App.showToast('Loja adicionada ao banco de dados!');
         };
     },
 
-    showEditRegistration(id) {
-        const regs = Store.get(Store.KEYS.REGISTRATIONS);
+    async renderRegistrations() {
+        const regs = await Store.get(Store.TABLES.REGISTRATIONS);
+        this.viewContainer.innerHTML = `
+            <div class="section-header">
+                <h1>Cadastros e Pendências</h1>
+                <button class="btn btn-primary" onclick="App.showAddRegistration()">
+                    <i data-lucide="plus-circle"></i> Novo Credenciamento
+                </button>
+            </div>
+            <div class="card">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Loja</th>
+                            <th>Código REV</th>
+                            <th>Etapa SERPRO</th>
+                            <th>Etapa Detran/RS</th>
+                            <th>Renave Sul</th>
+                            <th align="right">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${regs.map(reg => `
+                            <tr>
+                                <td><strong>${reg.store_name}</strong></td>
+                                <td><code>${reg.rev_code}</code></td>
+                                <td>
+                                    <span class="tag status-${reg.serpro}">${reg.serpro.replace('-', ' ')}</span>
+                                </td>
+                                <td>
+                                    <span class="tag status-${reg.detran}">${reg.detran.replace('-', ' ')}</span>
+                                </td>
+                                <td>
+                                    <span class="tag status-${reg.renave}">${reg.renave === 'concluido' ? 'Ativo' : 'Inativo'}</span>
+                                </td>
+                                <td align="right">
+                                    <button class="btn btn-icon" onclick="App.showEditRegistration(${reg.id})">
+                                        <i data-lucide="settings"></i>
+                                    </button>
+                                    <button class="btn btn-icon" onclick="App.deleteRegistration(${reg.id})">
+                                        <i data-lucide="trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    },
+
+    async showEditRegistration(id) {
+        const regs = await Store.get(Store.TABLES.REGISTRATIONS);
         const reg = regs.find(r => r.id === id);
         if (!reg) return;
 
-        this.modalTitle.innerText = `Gestão: ${reg.storeName}`;
+        this.modalTitle.innerText = `Gestão: ${reg.store_name}`;
         this.modalBody.innerHTML = `
             <form id="edit-reg-form">
                 <div class="form-group">
                     <label>Registro da Loja (REV)</label>
-                    <input type="text" class="form-control" id="edit-rev" value="${reg.revCode || 'REV'}" placeholder="Ex: REV1234">
+                    <input type="text" class="form-control" id="edit-rev" value="${reg.rev_code || 'REV'}" placeholder="Ex: REV1234">
                 </div>
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
                     <div class="form-group">
                         <label>Senha Detran</label>
-                        <input type="password" class="form-control" id="edit-detran-pass" value="${reg.detranPassword || ''}">
+                        <input type="password" class="form-control" id="edit-detran-pass" value="${reg.detran_password || ''}">
                     </div>
                     <div class="form-group">
                         <label>Senha SERPRO</label>
-                        <input type="password" class="form-control" id="edit-serpro-pass" value="${reg.serproPassword || ''}">
+                        <input type="password" class="form-control" id="edit-serpro-pass" value="${reg.serpro_password || ''}">
                     </div>
                 </div>
 
@@ -1028,34 +1116,108 @@ const App = {
         `;
         this.showModal();
 
-        document.getElementById('edit-reg-form').onsubmit = (e) => {
+        document.getElementById('edit-reg-form').onsubmit = async (e) => {
             e.preventDefault();
-            const updatedRegs = Store.get(Store.KEYS.REGISTRATIONS);
-            const index = updatedRegs.findIndex(r => r.id === id);
-            
-            updatedRegs[index] = {
-                ...updatedRegs[index],
-                revCode: document.getElementById('edit-rev').value,
-                detranPassword: document.getElementById('edit-detran-pass').value,
-                serproPassword: document.getElementById('edit-serpro-pass').value,
+            await Store.updateItem(Store.TABLES.REGISTRATIONS, id, {
+                rev_code: document.getElementById('edit-rev').value,
+                detran_password: document.getElementById('edit-detran-pass').value,
+                serpro_password: document.getElementById('edit-serpro-pass').value,
                 serpro: document.getElementById('edit-serpro-status').value,
                 detran: document.getElementById('edit-detran-status').value,
                 renave: document.getElementById('edit-renave-status').checked ? 'concluido' : 'nao-iniciada'
-            };
-            
-            Store.save(Store.KEYS.REGISTRATIONS, updatedRegs);
+            });
             App.hideModal();
-            App.render();
-            App.showToast('Cadastro atualizado com sucesso!');
+            await App.render();
+            App.showToast('Cadastro atualizado no banco!');
         };
     },
 
-    deleteRegistration(id) {
+    async deleteRegistration(id) {
         if (confirm('Deseja excluir este registro de loja?')) {
-            Store.deleteItem(Store.KEYS.REGISTRATIONS, id);
-            this.render();
+            await Store.deleteItem(Store.TABLES.REGISTRATIONS, id);
+            await this.render();
             this.showToast('Registro removido');
         }
+    },
+
+    async showAddTransaction() {
+        const regs = await Store.get(Store.TABLES.REGISTRATIONS);
+        this.modalTitle.innerText = 'Novo Lançamento Financeiro';
+        this.modalBody.innerHTML = `
+            <form id="add-trans-form">
+                <div class="form-group">
+                    <label>Tipo de Lançamento</label>
+                    <select class="form-control" id="trans-type" onchange="App.toggleFinanceFields(this.value)">
+                        <option value="entry">Entrada (Mensalidade)</option>
+                        <option value="exit">Saída (Despesa)</option>
+                    </select>
+                </div>
+
+                <!-- Campos de ENTRADA -->
+                <div id="entry-fields">
+                    <div class="form-group">
+                        <label>Loja / Cliente</label>
+                        <select class="form-control" id="trans-store-id">
+                            ${regs.map(r => `<option value="${r.id}">${r.store_name}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Mês de Referência</label>
+                        <input type="month" class="form-control" id="trans-ref-month" value="${new Date().toISOString().substring(0, 7)}">
+                    </div>
+                </div>
+
+                <!-- Campos de SAÍDA -->
+                <div id="exit-fields" style="display: none;">
+                    <div class="form-group">
+                        <label>Categoria da Despesa</label>
+                        <select class="form-control" id="trans-category">
+                            <option value="Combustível">Combustível</option>
+                            <option value="Alimentação">Alimentação</option>
+                            <option value="Impostos">Impostos</option>
+                            <option value="Contabilidade">Contabilidade</option>
+                            <option value="Outros">Outros (Diversos)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Valor (R$)</label>
+                    <input type="number" step="0.01" class="form-control" id="trans-value" required>
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Confirmar Lançamento</button>
+            </form>
+        `;
+        this.showModal();
+
+        document.getElementById('add-trans-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const type = document.getElementById('trans-type').value;
+            let description = '';
+            let storeId = null;
+
+            if (type === 'entry') {
+                const storeSelect = document.getElementById('trans-store-id');
+                const storeName = storeSelect.options[storeSelect.selectedIndex].text;
+                const refMonth = document.getElementById('trans-ref-month').value;
+                description = `Mensalidade de ${storeName} referente a ${refMonth}`;
+                storeId = parseInt(storeSelect.value);
+            } else {
+                description = document.getElementById('trans-category').value;
+            }
+
+            await Store.addItem(Store.TABLES.TRANSACTIONS, {
+                store_id: storeId,
+                date: new Date().toISOString().split('T')[0],
+                description: description,
+                value: parseFloat(document.getElementById('trans-value').value),
+                type: type
+            });
+            App.hideModal();
+            await App.render();
+            App.showToast('Lançamento registrado na nuvem!');
+        };
     },
 };
 
