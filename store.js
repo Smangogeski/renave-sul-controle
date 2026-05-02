@@ -1,5 +1,5 @@
 /**
- * Store logic for Renave Sul - Cloud Version (Versão Boa)
+ * Store logic for Renave Sul - Cloud Version (Final Sync Fix)
  */
 const SUPABASE_CONFIG = {
     url: 'https://vlvngvhrfydtejbjfbrn.supabase.co',
@@ -14,30 +14,45 @@ const Store = {
         CLIENTS: 'renave_v2_clients',
         APPOINTMENTS: 'renave_v2_appointments',
         REGISTRATIONS: 'renave_v2_registrations',
-        TRANSACTIONS: 'renave_v2_transactions'
+        TRANSACTIONS: 'renave_v2_transactions',
+        SETTINGS: 'renave_v2_settings'
     },
 
     data: {},
+    initPromise: null,
 
-    async init() {
-        if (!supabase) return;
-        try {
-            const results = await Promise.all([
-                supabase.from('tasks').select('*'),
-                supabase.from('clients').select('*'),
-                supabase.from('registrations').select('*'),
-                supabase.from('transactions').select('*')
-            ]);
+    init() {
+        if (this.initPromise) return this.initPromise;
+        
+        this.initPromise = new Promise(async (resolve) => {
+            console.log('☁️ Iniciando sincronização Cloud...');
+            if (!supabase) {
+                console.error('Supabase não encontrado.');
+                return resolve();
+            }
 
-            this.data[this.KEYS.TASKS] = results[0].data || [];
-            this.data[this.KEYS.CLIENTS] = results[1].data || [];
-            this.data[this.KEYS.REGISTRATIONS] = results[2].data || [];
-            this.data[this.KEYS.TRANSACTIONS] = results[3].data || [];
-            this.data[this.KEYS.APPOINTMENTS] = [];
+            try {
+                const [tasks, clients, regs, trans] = await Promise.all([
+                    supabase.from('tasks').select('*'),
+                    supabase.from('clients').select('*'),
+                    supabase.from('registrations').select('*'),
+                    supabase.from('transactions').select('*')
+                ]);
 
-            console.log('✅ Cloud Sincronizado.');
-            if (window.App && window.App.render) window.App.render();
-        } catch (e) { console.error(e); }
+                this.data[this.KEYS.TASKS] = tasks.data || [];
+                this.data[this.KEYS.CLIENTS] = clients.data || [];
+                this.data[this.KEYS.REGISTRATIONS] = regs.data || [];
+                this.data[this.KEYS.TRANSACTIONS] = trans.data || [];
+                this.data[this.KEYS.APPOINTMENTS] = [];
+
+                console.log('✅ Sincronização concluída.');
+            } catch (e) {
+                console.error('Erro na sincronização:', e);
+            }
+            resolve();
+        });
+
+        return this.initPromise;
     },
 
     get(key) { return this.data[key] || []; },
@@ -58,7 +73,9 @@ const Store = {
         const table = key.replace('renave_v2_', '');
         await supabase.from(table).update(updates).eq('id', id);
         const index = this.data[key].findIndex(i => i.id === id);
-        if (index !== -1) this.data[key][index] = { ...this.data[table][index], ...updates };
+        if (index !== -1) {
+            this.data[key][index] = { ...this.data[key][index], ...updates };
+        }
     },
 
     async deleteItem(key, id) {
@@ -68,4 +85,5 @@ const Store = {
     }
 };
 
+// Iniciar conexão imediatamente
 Store.init();

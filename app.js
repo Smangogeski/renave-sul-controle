@@ -5,18 +5,24 @@ const App = {
     currentView: 'dashboard',
 
     async init() {
-        // Pular login (Requisito usuário)
+        if (this.initialized) return;
+        this.initialized = true;
+        console.log('🚀 Iniciando App...');
+        
         const loginScreen = document.getElementById('login-screen');
         const appContainer = document.querySelector('.app-container');
         if (loginScreen) loginScreen.style.display = 'none';
         if (appContainer) appContainer.style.display = 'flex';
 
+        console.log('📦 Aguardando Store...');
         await Store.init();
         
+        console.log('🖼️ Renderizando Interface...');
         this.cacheDOM();
         this.bindEvents();
         this.render();
         lucide.createIcons();
+        console.log('✅ Sistema Pronto.');
     },
 
     checkAuth() {
