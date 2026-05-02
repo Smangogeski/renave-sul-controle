@@ -20,7 +20,7 @@ function initSupabase() {
     }
 }
 
-const Store = {
+window.Store = {
     TABLES: {
         TASKS: 'tasks',
         CLIENTS: 'clients',
@@ -78,7 +78,7 @@ window.App = {
         try {
             this.cacheDOM();
             this.checkAuth();
-            await Store.init();
+            await window.Store.init();
             this.bindEvents();
             if (sessionStorage.getItem('renave_auth')) {
                 await this.render();
@@ -116,7 +116,7 @@ window.App = {
             const pass = document.getElementById('login-password').value.trim();
 
             // Login Admin Renave Sul
-            if (email === 'admin@renavesul.com.br' && pass === 'R3n@ve26') {
+            if (email === 'admin@renave-sul.com.br' && pass === 'R3n@ve26') {
                 console.log('Login aceito!');
                 sessionStorage.setItem('renave_auth', 'true');
                 this.checkAuth();
@@ -181,8 +181,8 @@ window.App = {
     },
 
     async renderDashboard() {
-        const tasks = (await Store.get(Store.TABLES.TASKS)) || [];
-        const regs = (await Store.get(Store.TABLES.REGISTRATIONS)) || [];
+        const tasks = (await window.Store.get(window.Store.TABLES.TASKS)) || [];
+        const regs = (await window.Store.get(window.Store.TABLES.REGISTRATIONS)) || [];
         
         const pendingTasks = tasks.filter(t => t.status === 'pendente').length;
         const overdueTasks = tasks.filter(t => t.deadline && new Date(t.deadline) < new Date() && t.status !== 'concluido').length;
@@ -217,7 +217,7 @@ window.App = {
     async initDashboardChart() {
         const ctx = document.getElementById('monthlyChart');
         if (!ctx) return;
-        const regs = await Store.get(Store.TABLES.REGISTRATIONS);
+        const regs = await window.Store.get(window.Store.TABLES.REGISTRATIONS);
         const history = this.getMonthlyHistory(regs);
         new Chart(ctx, {
             type: 'bar',
@@ -239,20 +239,20 @@ window.App = {
     },
 
     async renderTasks() {
-        const tasks = await Store.get(Store.TABLES.TASKS);
+        const tasks = await window.Store.get(window.Store.TABLES.TASKS);
         this.viewContainer.innerHTML = `
-            <div class="section-header"><h1>Minhas Tarefas</h1><button class="btn btn-primary" onclick="App.showAddTask()">+ Adicionar</button></div>
+            <div class="section-header"><h1>Minhas Tarefas</h1><button class="btn btn-primary" onclick="window.App.showAddTask()">+ Adicionar</button></div>
             <div class="card"><table class="data-table">
                 <thead><tr><th>Tarefa</th><th>Responsável</th><th>Prazo</th><th>Ações</th></tr></thead>
-                <tbody>${tasks.map(t => `<tr><td>${t.title}</td><td>${t.responsible}</td><td>${t.deadline}</td><td><button class="btn btn-icon" onclick="App.deleteTask(${t.id})"><i data-lucide="trash"></i></button></td></tr>`).join('')}</tbody>
+                <tbody>${tasks.map(t => `<tr><td>${t.title}</td><td>${t.responsible}</td><td>${t.deadline}</td><td><button class="btn btn-icon" onclick="window.App.deleteTask(${t.id})"><i data-lucide="trash"></i></button></td></tr>`).join('')}</tbody>
             </table></div>
         `;
     },
 
     async renderFinance() {
-        const trans = await Store.get(Store.TABLES.TRANSACTIONS);
+        const trans = await window.Store.get(window.Store.TABLES.TRANSACTIONS);
         this.viewContainer.innerHTML = `
-            <div class="section-header"><h1>Fluxo de Caixa</h1><button class="btn btn-primary" onclick="App.showAddTransaction()">+ Lançamento</button></div>
+            <div class="section-header"><h1>Fluxo de Caixa</h1><button class="btn btn-primary" onclick="window.App.showAddTransaction()">+ Lançamento</button></div>
             <div class="card"><table class="data-table">
                 <thead><tr><th>Data</th><th>Descrição</th><th>Valor</th></tr></thead>
                 <tbody>${trans.map(t => `<tr><td>${t.date}</td><td>${t.description}</td><td style="color:${t.type==='entry'?'#10b981':'#ef4444'}">R$ ${parseFloat(t.value).toFixed(2)}</td></tr>`).join('')}</tbody>
@@ -261,23 +261,23 @@ window.App = {
     },
 
     async renderClients() {
-        const clients = await Store.get(Store.TABLES.CLIENTS);
+        const clients = await window.Store.get(window.Store.TABLES.CLIENTS);
         this.viewContainer.innerHTML = `
-            <div class="section-header"><h1>Base de Clientes</h1><button class="btn btn-primary" onclick="App.showAddClient()">+ Novo Cliente</button></div>
+            <div class="section-header"><h1>Base de Clientes</h1><button class="btn btn-primary" onclick="window.App.showAddClient()">+ Novo Cliente</button></div>
             <div class="card"><table class="data-table">
                 <thead><tr><th>Nome</th><th>Contato</th><th>Ações</th></tr></thead>
-                <tbody>${clients.map(c => `<tr><td>${c.name}</td><td>${c.email || c.phone || '-'}</td><td><button class="btn btn-icon" onclick="App.deleteClient(${c.id})"><i data-lucide="trash"></i></button></td></tr>`).join('')}</tbody>
+                <tbody>${clients.map(c => `<tr><td>${c.name}</td><td>${c.email || c.phone || '-'}</td><td><button class="btn btn-icon" onclick="window.App.deleteClient(${c.id})"><i data-lucide="trash"></i></button></td></tr>`).join('')}</tbody>
             </table></div>
         `;
     },
 
     async renderRegistrations() {
-        const regs = await Store.get(Store.TABLES.REGISTRATIONS);
+        const regs = await window.Store.get(window.Store.TABLES.REGISTRATIONS);
         this.viewContainer.innerHTML = `
-            <div class="section-header"><h1>Processos em Aberto</h1><button class="btn btn-primary" onclick="App.showAddRegistration()">+ Iniciar Fluxo</button></div>
+            <div class="section-header"><h1>Processos em Aberto</h1><button class="btn btn-primary" onclick="window.App.showAddRegistration()">+ Iniciar Fluxo</button></div>
             <div class="card"><table class="data-table">
                 <thead><tr><th>Estabelecimento</th><th>SERPRO</th><th>Detran</th><th>Ações</th></tr></thead>
-                <tbody>${regs.map(r => `<tr><td>${r.store_name}</td><td>${r.serpro}</td><td>${r.detran}</td><td><button class="btn btn-icon" onclick="App.deleteRegistration(${r.id})"><i data-lucide="trash"></i></button></td></tr>`).join('')}</tbody>
+                <tbody>${regs.map(r => `<tr><td>${r.store_name}</td><td>${r.serpro}</td><td>${r.detran}</td><td><button class="btn btn-icon" onclick="window.App.deleteRegistration(${r.id})"><i data-lucide="trash"></i></button></td></tr>`).join('')}</tbody>
             </table></div>
         `;
     },
@@ -288,7 +288,7 @@ window.App = {
     showToast(msg) { console.log('Toast:', msg); },
     
     async updateAlertCount() { 
-        const tasks = await Store.get(Store.TABLES.TASKS);
+        const tasks = await window.Store.get(window.Store.TABLES.TASKS);
         const overdue = tasks.filter(t => t.deadline && new Date(t.deadline) < new Date() && t.status !== 'concluido').length;
         if (this.alertBadge) this.alertBadge.innerText = overdue;
     },
@@ -306,7 +306,7 @@ window.App = {
         this.showModal();
         document.getElementById('add-task-form').onsubmit = async (e) => {
             e.preventDefault();
-            await Store.addItem(Store.TABLES.TASKS, {
+            await window.Store.addItem(window.Store.TABLES.TASKS, {
                 title: document.getElementById('task-title').value,
                 responsible: document.getElementById('task-responsible').value,
                 deadline: document.getElementById('task-deadline').value,
@@ -328,16 +328,16 @@ window.App = {
         this.showModal();
         document.getElementById('add-reg-form').onsubmit = async (e) => {
             e.preventDefault();
-            await Store.addItem(Store.TABLES.REGISTRATIONS, { store_name: document.getElementById('reg-name').value });
+            await window.Store.addItem(window.Store.TABLES.REGISTRATIONS, { store_name: document.getElementById('reg-name').value });
             this.hideModal();
             await this.render();
         };
     },
 
-    async deleteTask(id) { if (confirm('Excluir tarefa?')) { await Store.deleteItem(Store.TABLES.TASKS, id); await this.render(); } },
-    async deleteRegistration(id) { if (confirm('Excluir registro?')) { await Store.deleteItem(Store.TABLES.REGISTRATIONS, id); await this.render(); } },
-    async deleteClient(id) { if (confirm('Excluir cliente?')) { await Store.deleteItem(Store.TABLES.CLIENTS, id); await this.render(); } }
+    async deleteTask(id) { if (confirm('Excluir tarefa?')) { await window.Store.deleteItem(window.Store.TABLES.TASKS, id); await this.render(); } },
+    async deleteRegistration(id) { if (confirm('Excluir registro?')) { await window.Store.deleteItem(window.Store.TABLES.REGISTRATIONS, id); await this.render(); } },
+    async deleteClient(id) { if (confirm('Excluir cliente?')) { await window.Store.deleteItem(window.Store.TABLES.CLIENTS, id); await this.render(); } }
 };
 
 // Iniciar Aplicação
-window.onload = () => App.init();
+window.onload = () => window.App.init();
