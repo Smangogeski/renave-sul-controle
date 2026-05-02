@@ -546,16 +546,16 @@ const App = {
     // --- Renderers ---
 
     async renderDashboard() {
-        const tasks = await Store.get(Store.TABLES.TASKS);
-        const regs = await Store.get(Store.TABLES.REGISTRATIONS);
-        const transactions = await Store.get(Store.TABLES.TRANSACTIONS);
+        const tasks = (await Store.get(Store.TABLES.TASKS)) || [];
+        const regs = (await Store.get(Store.TABLES.REGISTRATIONS)) || [];
+        const transactions = (await Store.get(Store.TABLES.TRANSACTIONS)) || [];
 
-        const pendingTasks = tasks.filter(t => t.status === 'pendente').length;
-        const overdueTasks = tasks.filter(t => new Date(t.deadline) < new Date() && t.status !== 'concluido').length;
+        const pendingTasks = tasks.length > 0 ? tasks.filter(t => t.status === 'pendente').length : 0;
+        const overdueTasks = tasks.length > 0 ? tasks.filter(t => new Date(t.deadline) < new Date() && t.status !== 'concluido').length : 0;
         
-        const ongoingRegistrations = regs.filter(r => 
+        const ongoingRegistrations = regs.length > 0 ? regs.filter(r => 
             r.serpro !== 'concluido' || r.detran !== 'concluido' || r.renave !== 'concluido'
-        ).length;
+        ).length : 0;
 
         this.viewContainer.innerHTML = `
             <div class="dashboard-header" style="margin-bottom: 2rem;">
@@ -595,7 +595,7 @@ const App = {
                     </div>
                     <div class="card">
                         <ul class="action-list">
-                            ${tasks.slice(0, 3).map(task => `
+                            ${tasks.length > 0 ? tasks.slice(0, 3).map(task => `
                                 <li class="action-item">
                                     <div class="status-indicator ${task.status}"></div>
                                     <div class="action-details">
@@ -604,7 +604,7 @@ const App = {
                                     </div>
                                     <span class="priority-tag ${task.priority}">${task.priority}</span>
                                 </li>
-                            `).join('')}
+                            `).join('') : '<li class="action-item">Nenhuma tarefa pendente</li>'}
                         </ul>
                     </div>
                 </div>
