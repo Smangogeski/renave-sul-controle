@@ -78,14 +78,15 @@ window.App = {
         try {
             this.cacheDOM();
             this.checkAuth();
-            await window.Store.init();
+            window.Store.init(); // Não esperar, carregar em paralelo
             this.bindEvents();
             if (sessionStorage.getItem('renave_auth')) {
-                await this.render();
+                this.render();
             }
-            lucide.createIcons();
+            console.log('Interface preparada.');
         } catch (error) {
-            console.error('Erro na inicialização:', error);
+            console.warn('Aviso na inicialização:', error);
+            this.checkAuth(); // Tenta carregar o login mesmo com erro
         }
     },
 
@@ -105,27 +106,26 @@ window.App = {
     },
 
     bindLoginEvents() {
-        const loginForm = document.getElementById('login-form');
-        if (!loginForm) return;
+        const loginBtn = document.querySelector('#login-form button');
+        if (!loginBtn) return;
 
-        loginForm.onsubmit = async (e) => {
+        loginBtn.onclick = async (e) => {
             e.preventDefault();
-            alert('Tentando acessar com: ' + document.getElementById('login-email').value);
-            console.log('Tentativa de login...');
+            console.log('Botão de login clicado!');
             const email = document.getElementById('login-email').value.trim();
             const pass = document.getElementById('login-password').value.trim();
 
-            // Login Admin Renave Sul
-            if (email === 'admin@renave-sul.com.br' && pass === 'R3n@ve26') {
-                console.log('Login aceito!');
-                sessionStorage.setItem('renave_auth', 'true');
-                this.checkAuth();
-                await this.render();
-            } else {
-                console.warn('Credenciais incorretas.');
-                const err = document.getElementById('login-error');
-                if (err) err.style.display = 'block';
+            if (email === 'admin@renave-sul-gestao.com.br' || email === 'admin@renave-sul.com.br') {
+                if (pass === 'R3n@ve26') {
+                    sessionStorage.setItem('renave_auth', 'true');
+                    this.checkAuth();
+                    await this.render();
+                    return;
+                }
             }
+            
+            const err = document.getElementById('login-error');
+            if (err) err.style.display = 'block';
         };
     },
 
