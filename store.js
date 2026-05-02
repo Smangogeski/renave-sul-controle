@@ -1,91 +1,121 @@
-console.log('Tentando carregar Store.js...');
 /**
- * Store logic for Renave Sul - Supabase Edition
- * Handles communication with the Supabase Cloud Database
+ * Store logic for Renave Sul - Cloud Version (Supabase)
+ * Handles persistence with Supabase instead of localStorage
  */
 
-// CONFIGURAÇÃO SUPABASE
-const SUPABASE_URL = 'https://vlvngvhrfydtejbjfbrn.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZsdm5ndmhyZnlkdGVqYmpmYnJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3MzcwMDUsImV4cCI6MjA5MzMxMzAwNX0.DpbF_oC0xne36qc4t_XZ8WfMuOfjK9vqRL_65DVcMOE';
+const SUPABASE_CONFIG = {
+    url: 'https://vlvngvhrfydtejbjfbrn.supabase.co',
+    key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZsdm5ndmhyZnlkdGVqYmpmYnJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3MzcwMDUsImV4cCI6MjA5MzMxMzAwNX0.DpbF_oC0xne36qc4t_XZ8WfMuOfjK9vqRL_65DVcMOE'
+};
 
-// Inicialização robusta do Supabase
-let supabase;
-try {
-    const lib = window.supabase || (window.supabaseJS ? window.supabaseJS : null);
-    if (lib) {
-        supabase = lib.createClient(SUPABASE_URL, SUPABASE_KEY);
-    }
-} catch (e) {
-    console.error('Falha ao instanciar Supabase:', e);
-}
+const supabase = window.supabase ? window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.key) : null;
 
-window.Store = {
-    // Tabelas no Supabase
-    TABLES: {
+const Store = {
+    KEYS: {
         TASKS: 'tasks',
         CLIENTS: 'clients',
+        APPOINTMENTS: 'appointments',
         REGISTRATIONS: 'registrations',
-        TRANSACTIONS: 'transactions'
+        TRANSACTIONS: 'transactions',
+        SETTINGS: 'settings'
+    },
+
+    // Cache local para o App funcionar de forma síncrona
+    data: {
+        tasks: [],
+        clients: [],
+        appointments: [],
+        registrations: [],
+        transactions: [],
+        settings: {}
     },
 
     async init() {
-        if (!supabase) {
-            console.error('Supabase não foi carregado corretamente.');
-            return;
-        }
-        console.log('Sistema conectado ao Supabase Cloud.');
+        console.log('☁️ Inicializando Store Cloud...');
+        await this.fetchAll();
     },
 
-    // Buscar todos os registros (Asíncrono)
-    async get(table) {
-        const { data, error } = await supabase
-            .from(table)
-            .select('*')
-            .order('created_at', { ascending: false });
-        
-        if (error) {
-            console.error(`Erro ao buscar ${table}:`, error);
-            return [];
-        }
-        return data;
-    },
+    async fetchAll() {
+        if (!supabase) return;
+        try {
+            const results = await Promise.all([
+                supabase.from('tasks').select('*').order('id', { ascending: false }),
+                supabase.from('clients').select('*'),
+                supabase.from('registrations').select('*').order('id', { ascending: false }),
+                supabase.from('transactions').select('*').order('id', { ascending: false })
+            ]);
 
-    // Adicionar novo registro
-    async addItem(table, item) {
-        const { data, error } = await supabase
-            .from(table)
-            .insert([item])
-            .select();
+            this.data.tasks = results[0].data || [];
+            this.data.clients = results[1].data || [];
+            this.data.registrations = results[2].data || [];
+            this.data.transactions = results[3].data || [];
+            
+            // Appointments (opcional, fallback para vazio se não existir tabela)
+            const { data: appts } = await supabase.from('appointments').select('*').catch(() => ({ data: [] }));
+            this.data.appointments = appts || [];
 
-        if (error) {
-            console.error(`Erro ao adicionar em ${table}:`, error);
-            return null;
-        }
-        return data[0];
-    },
-
-    // Atualizar registro existente
-    async updateItem(table, id, updates) {
-        const { error } = await supabase
-            .from(table)
-            .update(updates)
-            .eq('id', id);
-
-        if (error) {
-            console.error(`Erro ao atualizar ${table}:`, error);
+            console.log('✅ Dados da nuvem carregados.');
+        } catch (err) {
+            console.error('❌ Erro ao carregar dados:', err);
         }
     },
 
-    // Deletar registro
-    async deleteItem(table, id) {
-        const { error } = await supabase
-            .from(table)
-            .delete()
-            .eq('id', id);
+    get(key) {
+        // Retorna do cache para manter a performance original do App
+        return this.data[key] || [];
+    },
 
-        if (error) {
-            console.error(`Erro ao deletar de ${table}:`, error);
+    async save(key, data) {
+        // No modo Supabase, as atualizações são feitas item a item para evitar conflitos
+        // Mas mantemos esta função como cache local
+        this.data[key] = data;
+    },
+
+    async addItem(key, item) {
+        if (!supabase) return item;
+        try {
+            const { data, error } = await supabase.from(key).insert([item]).select();
+            if (error) throw error;
+            
+            // Atualiza cache local e retorna
+            const newItem = data[0];
+            this.data[key].unshift(newItem);
+            return newItem;
+        } catch (err) {
+            console.error(`Erro ao adicionar em ${key}:`, err);
+            return item;
+        }
+    },
+
+    async updateItem(key, id, updates) {
+        if (!supabase) return;
+        try {
+            const { error } = await supabase.from(key).update(updates).eq('id', id);
+            if (error) throw error;
+            
+            // Atualiza cache local
+            const index = this.data[key].findIndex(i => i.id === id);
+            if (index !== -1) {
+                this.data[key][index] = { ...this.data[key][index], ...updates };
+            }
+        } catch (err) {
+            console.error(`Erro ao atualizar ${key}:`, err);
+        }
+    },
+
+    async deleteItem(key, id) {
+        if (!supabase) return;
+        try {
+            const { error } = await supabase.from(key).delete().eq('id', id);
+            if (error) throw error;
+            
+            // Atualiza cache local
+            this.data[key] = this.data[key].filter(i => i.id !== id);
+        } catch (err) {
+            console.error(`Erro ao deletar em ${key}:`, err);
         }
     }
 };
-console.log('Store.js carregado com sucesso.');
+
+// Iniciar conexão
+Store.init();

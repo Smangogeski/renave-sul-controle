@@ -1,247 +1,242 @@
 /**
- * Renave Sul v3.0 - Cloud Management System
- * Unified Logic File
+ * App Logic for Renave Sul - Cloud Version
+ * Based on Original Code v2.0
  */
-
-// --- 1. CONFIGURAÇÃO DO BANCO (STORE) ---
-const SUPABASE_CONFIG = {
-    url: 'https://vlvngvhrfydtejbjfbrn.supabase.co',
-    key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZsdm5ndmhyZnlkdGVqYmpmYnJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3MzcwMDUsImV4cCI6MjA5MzMxMzAwNX0.DpbF_oC0xne36qc4t_XZ8WfMuOfjK9vqRL_65DVcMOE'
-};
-
-let supabaseClient = null;
-
-function getSupabase() {
-    if (!supabaseClient) {
-        try {
-            const lib = window.supabase || window.supabaseJS;
-            if (lib) {
-                supabaseClient = lib.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.key);
-                console.log('✅ Supabase conectado.');
-                document.getElementById('system-status').classList.add('online');
-            }
-        } catch (e) {
-            console.error('❌ Erro Supabase:', e);
-        }
-    }
-    return supabaseClient;
-}
-
-window.Store = {
-    TABLES: {
-        TASKS: 'tasks',
-        CLIENTS: 'clients',
-        REGISTRATIONS: 'registrations',
-        TRANSACTIONS: 'transactions'
-    },
-
-    async getAll(table) {
-        const client = getSupabase();
-        if (!client) return [];
-        const { data, error } = await client.from(table).select('*').order('created_at', { ascending: false });
-        if (error) { console.error(`Erro ao buscar ${table}:`, error); return []; }
-        return data || [];
-    },
-
-    async add(table, item) {
-        const client = getSupabase();
-        if (!client) return null;
-        const { data, error } = await client.from(table).insert([item]).select();
-        return error ? null : data[0];
-    },
-
-    async update(table, id, updates) {
-        const client = getSupabase();
-        if (!client) return;
-        await client.from(table).update(updates).eq('id', id);
-    },
-
-    async remove(table, id) {
-        const client = getSupabase();
-        if (!client) return;
-        await client.from(table).delete().eq('id', id);
-    }
-};
-
-// --- 2. LÓGICA DA INTERFACE (APP) ---
-window.App = {
+const App = {
     currentView: 'dashboard',
-    userData: { name: 'Gestor', role: 'Administrador' },
 
-    init() {
-        console.log('🚀 Iniciando Renave Sul v3.0...');
+    async init() {
+        console.log('🚀 Iniciando Sistema Cloud...');
         
-        // Alerta de protocolo local
-        if (window.location.protocol === 'file:') {
-            alert('⚠️ ATENÇÃO: Você abriu o arquivo diretamente. Para o banco de dados funcionar localmente, você deve rodar um servidor (ex: npx serve) ou usar o link da Vercel.');
-        }
-
+        // Pular login por padrão
+        this.skipAuth();
+        
+        // Aguardar carregamento dos dados da nuvem
+        await Store.init();
+        
+        this.cacheDOM();
         this.bindEvents();
-        this.checkAuth();
-        getSupabase(); // Forçar conexão inicial
-    },
-
-    checkAuth() {
-        // Modo Desenvolvedor: Login sempre ativo
-        const loginScreen = document.getElementById('login-screen');
-        const appWrapper = document.querySelector('.app-wrapper');
-
-        if (loginScreen) loginScreen.style.display = 'none';
-        if (appWrapper) appWrapper.style.display = 'flex';
         this.render();
-    },
-
-    bindLogin() {
-        const form = document.getElementById('login-form');
-        form.onsubmit = async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('login-email').value.trim();
-            const pass = document.getElementById('login-password').value.trim();
-
-            if (email === 'admin@renave-sul.com.br' && pass === 'R3n@ve26') {
-                sessionStorage.setItem('renave_auth', 'true');
-                this.checkAuth();
-            } else {
-                document.getElementById('login-error').style.display = 'block';
-            }
-        };
-    },
-
-    bindEvents() {
-        // Navegação
-        document.querySelectorAll('.sidebar-nav li').forEach(item => {
-            item.onclick = () => {
-                document.querySelectorAll('.sidebar-nav li').forEach(i => i.classList.remove('active'));
-                item.classList.add('active');
-                this.currentView = item.dataset.view;
-                this.render();
-                // Fechar sidebar no mobile
-                document.querySelector('.sidebar').classList.remove('active');
-                document.getElementById('sidebar-overlay').classList.remove('active');
-            };
-        });
-
-        // Toggle Mobile
-        const btnToggle = document.getElementById('mobile-toggle');
-        const overlay = document.getElementById('sidebar-overlay');
-        const sidebar = document.querySelector('.sidebar');
-        
-        btnToggle.onclick = () => {
-            sidebar.classList.add('active');
-            overlay.classList.add('active');
-        };
-        
-        overlay.onclick = () => {
-            sidebar.classList.remove('active');
-            overlay.classList.remove('active');
-        };
-    },
-
-    async render() {
-        const container = document.getElementById('view-container');
-        if (!container) return;
-
-        container.innerHTML = '<div class="loader-box">Carregando dados...</div>';
-
-        switch(this.currentView) {
-            case 'dashboard': await this.renderDashboard(container); break;
-            case 'tasks': await this.renderTasks(container); break;
-            case 'finance': await this.renderFinance(container); break;
-            case 'clients': await this.renderClients(container); break;
-            case 'registrations': await this.renderRegistrations(container); break;
-        }
-
         lucide.createIcons();
     },
 
-    // --- Renderers ---
+    skipAuth() {
+        const loginScreen = document.getElementById('login-screen');
+        const appContainer = document.querySelector('.app-container');
+        if (loginScreen) loginScreen.style.display = 'none';
+        if (appContainer) appContainer.style.display = 'flex';
+    },
 
-    async renderDashboard(container) {
-        const tasks = await window.Store.getAll(window.Store.TABLES.TASKS);
-        const regs = await window.Store.getAll(window.Store.TABLES.REGISTRATIONS);
+    // Mantemos as funções originais, mas adaptadas para chamadas Async do Store
+    async addItem(key, item) {
+        await Store.addItem(key, item);
+        this.render();
+    },
+
+    async updateItem(key, id, updates) {
+        await Store.updateItem(key, id, updates);
+        this.render();
+    },
+
+    async deleteItem(key, id) {
+        if (confirm('Deseja excluir este item?')) {
+            await Store.deleteItem(key, id);
+            this.render();
+        }
+    },
+
+    // --- CÓDIGO ORIGINAL ABAIXO (MANTIDO E ADAPTADO) ---
+
+    fileHandle: null,
+
+    async requestFileSystemAccess() {
+        this.showToast('ℹ️ Modo Cloud Ativo: O Sync local não é mais necessário.');
+    },
+
+    exportToJSON() {
+        const fullData = {
+            tasks: Store.get(Store.KEYS.TASKS),
+            clients: Store.get(Store.KEYS.CLIENTS),
+            registrations: Store.get(Store.KEYS.REGISTRATIONS),
+            transactions: Store.get(Store.KEYS.TRANSACTIONS),
+            exportDate: new Date().toISOString()
+        };
+
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(fullData, null, 2));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", `renave_sul_backup_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.json`);
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
         
-        const pending = tasks.filter(t => t.status === 'pendente').length;
-        const overdue = tasks.filter(t => t.deadline && new Date(t.deadline) < new Date() && t.status !== 'concluido').length;
+        this.showToast('Backup JSON gerado com sucesso!');
+    },
 
-        container.innerHTML = `
+    cacheDOM() {
+        this.viewContainer = document.getElementById('view-container');
+        this.navItems = document.querySelectorAll('.sidebar-nav li');
+        this.quickAddBtn = document.getElementById('btn-quick-add');
+        this.modalOverlay = document.getElementById('modal-container');
+        this.closeModalBtn = document.getElementById('close-modal');
+        this.modalBody = document.getElementById('modal-body');
+        this.modalTitle = document.getElementById('modal-title');
+        this.alertBadge = document.getElementById('alert-count');
+    },
+
+    bindEvents() {
+        this.navItems.forEach(item => {
+            if (item.dataset.view) {
+                item.addEventListener('click', () => {
+                    this.navItems.forEach(i => i.classList.remove('active'));
+                    item.classList.add('active');
+                    this.currentView = item.dataset.view;
+                    this.render();
+                });
+            }
+        });
+
+        if (this.quickAddBtn) this.quickAddBtn.addEventListener('click', () => this.showQuickAdd());
+        if (this.closeModalBtn) this.closeModalBtn.addEventListener('click', () => this.hideModal());
+        if (this.modalOverlay) {
+            this.modalOverlay.addEventListener('click', (e) => {
+                if (e.target === this.modalOverlay) this.hideModal();
+            });
+        }
+
+        // Mobile Menu Toggle
+        const mobileToggle = document.getElementById('mobile-menu-toggle');
+        const sidebar = document.querySelector('.sidebar');
+        const overlay = document.getElementById('sidebar-overlay');
+
+        const toggleMenu = () => {
+            sidebar.classList.toggle('active');
+            overlay.classList.toggle('active');
+        };
+
+        if (mobileToggle) mobileToggle.addEventListener('click', toggleMenu);
+        if (overlay) overlay.addEventListener('click', toggleMenu);
+    },
+
+    render() {
+        this.viewContainer.innerHTML = '';
+        
+        switch (this.currentView) {
+            case 'dashboard':
+                this.renderDashboard();
+                setTimeout(() => App.initDashboardChart(), 0);
+                break;
+            case 'tasks':
+                this.renderTasks();
+                break;
+            case 'finance':
+                this.renderFinance();
+                break;
+            case 'clients':
+                this.renderClients();
+                break;
+            case 'registrations':
+                this.renderRegistrations();
+                break;
+        }
+        
+        this.updateAlertCount();
+        lucide.createIcons();
+    },
+
+    renderDashboard() {
+        const tasks = Store.get(Store.KEYS.TASKS);
+        const appts = Store.get(Store.KEYS.APPOINTMENTS);
+        const regs = Store.get(Store.KEYS.REGISTRATIONS);
+
+        const pendingTasks = tasks.filter(t => t.status === 'pendente').length;
+        const overdueTasks = tasks.filter(t => new Date(t.deadline) < new Date() && t.status !== 'concluido').length;
+        const todayAppointments = appts.length;
+        const ongoingRegistrations = regs.filter(r => r.serpro !== 'concluido' || r.detran !== 'concluido').length;
+
+        this.viewContainer.innerHTML = `
+            <div class="dashboard-header" style="margin-bottom: 2rem;">
+                <h1 style="font-size: 2rem; font-weight: 800; color: var(--text-primary);">Dashboard Operacional</h1>
+            </div>
+
             <div class="dashboard-grid">
                 <div class="kpi-card">
                     <span class="label">Tarefas Pendentes</span>
-                    <span class="value">${pending}</span>
-                </div>
-                <div class="kpi-card" style="border-color: var(--danger)">
-                    <span class="label">Processos Atrasados</span>
-                    <span class="value" style="color: var(--danger)">${overdue}</span>
+                    <span class="value">${pendingTasks}</span>
                 </div>
                 <div class="kpi-card">
-                    <span class="label">Total de Clientes</span>
-                    <span class="value">${regs.length}</span>
+                    <span class="label">Pendências Urgentes</span>
+                    <span class="value" style="color: var(--danger);">${overdueTasks}</span>
                 </div>
-                <div class="kpi-card" style="border-color: var(--success)">
-                    <span class="label">Credenciamentos Ativos</span>
-                    <span class="value">${regs.filter(r => r.renave === 'concluido').length}</span>
+                <div class="kpi-card">
+                    <span class="label">Visitas Hoje</span>
+                    <span class="value">${todayAppointments}</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="label">Cadastros em Andamento</span>
+                    <span class="value">${ongoingRegistrations}</span>
                 </div>
             </div>
 
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem;">
-                <div class="card">
-                    <div class="section-header"><h2>Ações Recentes</h2></div>
-                    <ul style="list-style: none;">
-                        ${tasks.slice(0, 5).map(t => `
-                            <li style="padding: 0.8rem 0; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between;">
-                                <div>
-                                    <div style="font-weight: 600;">${t.title}</div>
-                                    <div style="font-size: 0.75rem; color: var(--text-muted);">${t.responsible} • ${t.deadline}</div>
-                                </div>
-                                <span class="tag tag-pending">${t.status}</span>
-                            </li>
-                        `).join('') || '<li>Nenhuma tarefa recente.</li>'}
-                    </ul>
+            <div class="dashboard-sections" style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 2rem;">
+                <div class="section">
+                    <div class="section-header"><h2>Próximas Ações</h2></div>
+                    <div class="card">
+                        <ul class="action-list" style="list-style: none;">
+                            ${tasks.slice(0, 5).map(task => `
+                                <li style="padding: 1rem 0; border-bottom: 1px solid var(--bg-tertiary); display: flex; justify-content: space-between;">
+                                    <div><strong>${task.title}</strong><br><small>${task.deadline}</small></div>
+                                    <span class="tag">${task.status}</span>
+                                </li>
+                            `).join('') || '<li>Nenhuma tarefa.</li>'}
+                        </ul>
+                    </div>
                 </div>
-                <div class="card">
+                <div class="section">
                     <div class="section-header"><h2>Crescimento Mensal</h2></div>
-                    <div style="height: 250px;"><canvas id="chart-growth"></canvas></div>
+                    <div class="card"><canvas id="monthlyChart" height="150"></canvas></div>
                 </div>
             </div>
         `;
-        this.initChart(regs);
     },
 
-    initChart(regs) {
-        const ctx = document.getElementById('chart-growth');
+    initDashboardChart() {
+        const ctx = document.getElementById('monthlyChart');
         if (!ctx) return;
+        const regs = Store.get(Store.KEYS.REGISTRATIONS);
         const history = {};
         regs.forEach(r => {
-            const m = r.created_at ? r.created_at.substring(0, 7) : new Date().toISOString().substring(0, 7);
+            const m = r.createdAt ? r.createdAt.substring(0, 7) : new Date().toISOString().substring(0, 7);
             history[m] = (history[m] || 0) + 1;
         });
+        
         new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: Object.keys(history),
-                datasets: [{ label: 'Novos Clientes', data: Object.values(history), backgroundColor: '#f38b3c', borderRadius: 5 }]
+                datasets: [{ label: 'Novos Clientes', data: Object.values(history), backgroundColor: '#f38b3c', borderRadius: 6 }]
             },
             options: { responsive: true, maintainAspectRatio: false }
         });
     },
 
-    async renderTasks(container) {
-        const items = await window.Store.getAll(window.Store.TABLES.TASKS);
-        container.innerHTML = `
+    renderTasks() {
+        const tasks = Store.get(Store.KEYS.TASKS);
+        this.viewContainer.innerHTML = `
             <div class="section-header">
                 <h1>Gestão de Tarefas</h1>
-                <button class="btn-primary" onclick="window.App.showAddTask()"><i data-lucide="plus"></i> Nova Tarefa</button>
+                <button class="btn btn-primary" onclick="App.showAddTask()">Novo</button>
             </div>
-            <div class="card" style="overflow-x: auto;">
+            <div class="card">
                 <table class="data-table">
-                    <thead><tr><th>Tarefa</th><th>Responsável</th><th>Prazo</th><th>Status</th><th>Ações</th></tr></thead>
-                    <tbody>${items.map(t => `
+                    <thead><tr><th>Título</th><th>Responsável</th><th>Prazo</th><th>Status</th><th>Ações</th></tr></thead>
+                    <tbody>${tasks.map(t => `
                         <tr>
                             <td><strong>${t.title}</strong></td>
                             <td>${t.responsible}</td>
                             <td>${t.deadline}</td>
-                            <td><span class="tag tag-pending">${t.status}</span></td>
-                            <td><button class="btn-icon" onclick="window.App.deleteItem('${window.Store.TABLES.TASKS}', ${t.id})"><i data-lucide="trash-2"></i></button></td>
+                            <td>${t.status}</td>
+                            <td><button class="btn btn-icon" onclick="App.deleteItem('${Store.KEYS.TASKS}', ${t.id})"><i data-lucide="trash"></i></button></td>
                         </tr>`).join('')}
                     </tbody>
                 </table>
@@ -249,28 +244,18 @@ window.App = {
         `;
     },
 
-    async renderFinance(container) {
-        const trans = await window.Store.getAll(window.Store.TABLES.TRANSACTIONS);
-        const total = trans.reduce((acc, t) => acc + (t.type === 'entry' ? parseFloat(t.value) : -parseFloat(t.value)), 0);
-        
-        container.innerHTML = `
-            <div class="section-header">
-                <h1>Fluxo Financeiro</h1>
-                <button class="btn-primary" onclick="window.App.showAddFinance()"><i data-lucide="plus"></i> Novo Lançamento</button>
-            </div>
-            <div class="kpi-card" style="margin-bottom: 1.5rem; max-width: 300px;">
-                <span class="label">Saldo Consolidado</span>
-                <span class="value" style="color: ${total >= 0 ? 'var(--success)' : 'var(--danger)'}">R$ ${total.toFixed(2)}</span>
-            </div>
-            <div class="card" style="overflow-x: auto;">
+    renderFinance() {
+        const trans = Store.get(Store.KEYS.TRANSACTIONS);
+        this.viewContainer.innerHTML = `
+            <div class="section-header"><h1>Financeiro</h1><button class="btn btn-primary" onclick="App.showAddTransaction()">Novo</button></div>
+            <div class="card">
                 <table class="data-table">
-                    <thead><tr><th>Data</th><th>Descrição</th><th>Tipo</th><th>Valor</th></tr></thead>
+                    <thead><tr><th>Data</th><th>Descrição</th><th>Valor</th></tr></thead>
                     <tbody>${trans.map(t => `
                         <tr>
                             <td>${t.date}</td>
-                            <td>${t.description}</td>
-                            <td><span class="tag ${t.type === 'entry' ? 'tag-success' : 'tag-danger'}">${t.type}</span></td>
-                            <td style="font-weight: 700;">R$ ${parseFloat(t.value).toFixed(2)}</td>
+                            <td>${t.desc}</td>
+                            <td style="color: ${t.type === 'entry' ? 'var(--success)' : 'var(--danger)'}">R$ ${t.value.toLocaleString('pt-br')}</td>
                         </tr>`).join('')}
                     </tbody>
                 </table>
@@ -278,45 +263,28 @@ window.App = {
         `;
     },
 
-    async renderClients(container) {
-        const items = await window.Store.getAll(window.Store.TABLES.CLIENTS);
-        container.innerHTML = `
-            <div class="section-header">
-                <h1>Base de Clientes</h1>
-                <button class="btn-primary" onclick="window.App.showAddClient()"><i data-lucide="user-plus"></i> Novo Cliente</button>
-            </div>
-            <div class="card" style="overflow-x: auto;">
-                <table class="data-table">
-                    <thead><tr><th>Nome</th><th>Contato</th><th>Ações</th></tr></thead>
-                    <tbody>${items.map(c => `
-                        <tr>
-                            <td><strong>${c.name}</strong></td>
-                            <td>${c.email || c.phone || '-'}</td>
-                            <td><button class="btn-icon" onclick="window.App.deleteItem('${window.Store.TABLES.CLIENTS}', ${c.id})"><i data-lucide="trash-2"></i></button></td>
-                        </tr>`).join('')}
-                    </tbody>
-                </table>
+    renderClients() {
+        const clients = Store.get(Store.KEYS.CLIENTS);
+        this.viewContainer.innerHTML = `
+            <div class="section-header"><h1>Clientes</h1><button class="btn btn-primary" onclick="App.showAddClient()">Novo</button></div>
+            <div class="grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem;">
+                ${clients.map(c => `<div class="card"><h3>${c.name}</h3><p>${c.email}</p></div>`).join('')}
             </div>
         `;
     },
 
-    async renderRegistrations(container) {
-        const items = await window.Store.getAll(window.Store.TABLES.REGISTRATIONS);
-        container.innerHTML = `
-            <div class="section-header">
-                <h1>Credenciamentos</h1>
-                <button class="btn-primary" onclick="window.App.showAddReg()"><i data-lucide="file-plus"></i> Nova Loja</button>
-            </div>
-            <div class="card" style="overflow-x: auto;">
+    renderRegistrations() {
+        const regs = Store.get(Store.KEYS.REGISTRATIONS);
+        this.viewContainer.innerHTML = `
+            <div class="section-header"><h1>Processos</h1><button class="btn btn-primary" onclick="App.showAddRegistration()">Novo</button></div>
+            <div class="card">
                 <table class="data-table">
                     <thead><tr><th>Loja</th><th>SERPRO</th><th>Detran</th><th>Renave</th><th>Ações</th></tr></thead>
-                    <tbody>${items.map(r => `
+                    <tbody>${regs.map(r => `
                         <tr>
-                            <td><strong>${r.store_name}</strong></td>
-                            <td><span class="tag tag-pending">${r.serpro}</span></td>
-                            <td><span class="tag tag-pending">${r.detran}</span></td>
-                            <td><span class="tag ${r.renave === 'concluido' ? 'tag-success' : 'tag-pending'}">${r.renave}</span></td>
-                            <td><button class="btn-icon" onclick="window.App.deleteItem('${window.Store.TABLES.REGISTRATIONS}', ${r.id})"><i data-lucide="trash-2"></i></button></td>
+                            <td><strong>${r.storeName}</strong></td>
+                            <td>${r.serpro}</td><td>${r.detran}</td><td>${r.renave}</td>
+                            <td><button class="btn btn-icon" onclick="App.deleteItem('${Store.KEYS.REGISTRATIONS}', ${r.id})"><i data-lucide="trash"></i></button></td>
                         </tr>`).join('')}
                     </tbody>
                 </table>
@@ -324,120 +292,28 @@ window.App = {
         `;
     },
 
-    // --- Modais ---
-    showModal(title, bodyHtml) {
-        document.getElementById('modal-title').innerText = title;
-        document.getElementById('modal-body').innerHTML = bodyHtml;
-        document.getElementById('modal-container').classList.remove('hidden');
-    },
-    hideModal() {
-        document.getElementById('modal-container').classList.add('hidden');
+    showModal() { this.modalOverlay.classList.remove('hidden'); lucide.createIcons(); },
+    hideModal() { this.modalOverlay.classList.add('hidden'); },
+    showToast(msg) { 
+        const t = document.createElement('div'); t.className = 'toast success'; t.innerText = msg;
+        document.getElementById('toast-container').appendChild(t); setTimeout(() => t.remove(), 3000);
     },
 
     showAddTask() {
-        this.showModal('Nova Tarefa', `
-            <form id="form-add">
-                <div class="form-group"><label>Título</label><input type="text" id="f-title" required></div>
-                <div class="form-group"><label>Responsável</label><select id="f-resp" style="width:100%; padding:0.8rem; border-radius:10px; border:2px solid var(--border);"><option>Lucas</option><option>Mateus</option><option>Gabriela</option></select></div>
-                <div class="form-group"><label>Prazo</label><input type="date" id="f-date" required></div>
-                <button type="submit" class="btn-primary-lg">Salvar Tarefa</button>
-            </form>
-        `);
-        document.getElementById('form-add').onsubmit = async (e) => {
+        this.modalTitle.innerText = 'Nova Tarefa';
+        this.modalBody.innerHTML = `<form id="f-add"><input type="text" id="t-title" placeholder="Título" required><button type="submit" class="btn btn-primary">Salvar</button></form>`;
+        this.showModal();
+        document.getElementById('f-add').onsubmit = async (e) => {
             e.preventDefault();
-            await window.Store.add(window.Store.TABLES.TASKS, { 
-                title: document.getElementById('f-title').value, 
-                responsible: document.getElementById('f-resp').value,
-                deadline: document.getElementById('f-date').value,
-                status: 'pendente'
-            });
+            await Store.addItem(Store.KEYS.TASKS, { title: document.getElementById('t-title').value, status: 'pendente', deadline: new Date().toLocaleDateString() });
             this.hideModal(); this.render();
         };
     },
 
-    showAddClient() {
-        this.showModal('Novo Cliente', `
-            <form id="form-add">
-                <div class="form-group"><label>Nome</label><input type="text" id="f-name" required></div>
-                <div class="form-group"><label>E-mail</label><input type="email" id="f-email"></div>
-                <button type="submit" class="btn-primary-lg">Salvar Cliente</button>
-            </form>
-        `);
-        document.getElementById('form-add').onsubmit = async (e) => {
-            e.preventDefault();
-            await window.Store.add(window.Store.TABLES.CLIENTS, { 
-                name: document.getElementById('f-name').value, 
-                email: document.getElementById('f-email').value 
-            });
-            this.hideModal(); this.render();
-        };
-    },
-
-    showAddReg() {
-        this.showModal('Novo Credenciamento', `
-            <form id="form-add">
-                <div class="form-group"><label>Nome da Loja</label><input type="text" id="f-store" required></div>
-                <div class="form-group"><label>Código REV</label><input type="text" id="f-rev" placeholder="REV1234"></div>
-                <button type="submit" class="btn-primary-lg">Iniciar Processo</button>
-            </form>
-        `);
-        document.getElementById('form-add').onsubmit = async (e) => {
-            e.preventDefault();
-            await window.Store.add(window.Store.TABLES.REGISTRATIONS, { 
-                store_name: document.getElementById('f-store').value,
-                rev_code: document.getElementById('f-rev').value || 'REV',
-                serpro: 'pendente', 
-                detran: 'pendente',
-                renave: 'pendente'
-            });
-            this.hideModal(); this.render();
-        };
-    },
-
-    showAddFinance() {
-        this.showModal('Novo Lançamento', `
-            <form id="form-add">
-                <div class="form-group"><label>Descrição</label><input type="text" id="f-desc" required></div>
-                <div class="form-group"><label>Valor (R$)</label><input type="number" step="0.01" id="f-val" required></div>
-                <div class="form-group"><label>Tipo</label>
-                    <select id="f-type" style="width:100%; padding:0.8rem; border-radius:10px; border:2px solid var(--border);">
-                        <option value="entry">Entrada (Receita)</option>
-                        <option value="exit">Saída (Despesa)</option>
-                    </select>
-                </div>
-                <button type="submit" class="btn-primary-lg">Salvar Lançamento</button>
-            </form>
-        `);
-        document.getElementById('form-add').onsubmit = async (e) => {
-            e.preventDefault();
-            await window.Store.add(window.Store.TABLES.TRANSACTIONS, { 
-                description: document.getElementById('f-desc').value,
-                value: document.getElementById('f-val').value,
-                type: document.getElementById('f-type').value,
-                date: new Date().toISOString().split('T')[0]
-            });
-            this.hideModal(); this.render();
-        };
-    },
-
-    async updateRegStatus(id, field, value) {
-        const updates = {};
-        updates[field] = value;
-        await window.Store.update(window.Store.TABLES.REGISTRATIONS, id, updates);
-        this.render();
-    },
-
-    async deleteItem(table, id) {
-        if (confirm('Deseja excluir este item permanentemente?')) {
-            await window.Store.remove(table, id);
-            this.render();
-        }
-    },
-
-    logout() {
-        sessionStorage.clear();
-        location.reload();
+    updateAlertCount() {
+        const count = Store.get(Store.KEYS.TASKS).filter(t => t.status === 'pendente').length;
+        if (this.alertBadge) this.alertBadge.innerText = count;
     }
 };
 
-window.onload = () => window.App.init();
+window.onload = () => App.init();
