@@ -5,12 +5,26 @@ const App = {
     currentView: 'dashboard',
 
     async init() {
-        this.checkAuth();
-        await Store.init();
-        this.cacheDOM();
-        this.bindEvents();
-        await this.render();
-        lucide.createIcons();
+        try {
+            this.checkAuth();
+            await Store.init();
+            this.cacheDOM();
+            this.bindEvents();
+            await this.render();
+            lucide.createIcons();
+        } catch (error) {
+            console.error('Erro crítico na inicialização:', error);
+            document.body.innerHTML = `
+                <div style="padding: 2rem; text-align: center; font-family: sans-serif;">
+                    <h1 style="color: #ef4444;">Ops! O sistema não carregou.</h1>
+                    <p>Isso geralmente acontece quando as chaves do Supabase estão incorretas ou as tabelas não foram criadas.</p>
+                    <p style="font-size: 0.8rem; color: #666; background: #eee; padding: 1rem; border-radius: 8px; margin-top: 1rem;">
+                        Erro detectado: ${error.message}
+                    </p>
+                    <button onclick="location.reload()" style="margin-top: 1rem; padding: 0.5rem 1rem; cursor: pointer;">Tentar Novamente</button>
+                </div>
+            `;
+        }
     },
 
     checkAuth() {

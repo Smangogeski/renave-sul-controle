@@ -7,7 +7,16 @@
 const SUPABASE_URL = 'https://vlvngvhrfydtejbjfbrn.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZsdm5ndmhyZnlkdGVqYmpmYnJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3MzcwMDUsImV4cCI6MjA5MzMxMzAwNX0.DpbF_oC0xne36qc4t_XZ8WfMuOfjK9vqRL_65DVcMOE';
 
-const supabase = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+// Inicialização robusta do Supabase
+let supabase;
+try {
+    const lib = window.supabase || (window.supabaseJS ? window.supabaseJS : null);
+    if (lib) {
+        supabase = lib.createClient(SUPABASE_URL, SUPABASE_KEY);
+    }
+} catch (e) {
+    console.error('Falha ao instanciar Supabase:', e);
+}
 
 const Store = {
     // Tabelas no Supabase
