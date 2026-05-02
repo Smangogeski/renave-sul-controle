@@ -13,12 +13,12 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Supabase SDK -->
+    <!-- Supabase SDK (Única adição necessária) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="light-theme">
     <!-- Login Screen -->
-    <div id="login-screen" class="login-overlay" style="display: none;">
+    <div id="login-screen" class="login-overlay">
         <div class="login-card">
             <div class="login-header">
                 <div class="logo">
@@ -48,7 +48,7 @@
     </div>
 
     <div id="sidebar-overlay" class="sidebar-overlay"></div>
-    <div class="app-container" style="display: flex;">
+    <div class="app-container" style="display: none;">
         <!-- Sidebar Navigation -->
         <aside class="sidebar">
             <div class="sidebar-header">
@@ -88,7 +88,7 @@
                         <i data-lucide="download"></i>
                         <span>Backup JSON</span>
                     </li>
-                    <li id="sync-btn" onclick="App.requestFileSystemAccess()" style="color: var(--success); font-weight: 700;">
+                    <li id="sync-btn" onclick="App.requestFileSystemAccess()">
                         <i data-lucide="shield-check"></i>
                         <span>Ativar Auto-Sync</span>
                     </li>
