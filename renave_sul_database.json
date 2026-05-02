@@ -1,0 +1,19 @@
+{
+  "tasks": [],
+  "clients": [],
+  "registrations": [
+    {
+      "storeName": "Quadros Automoveis",
+      "revCode": "REV00273",
+      "createdAt": "2026-05-02T15:47:12.664Z",
+      "detranPassword": "",
+      "serproPassword": "",
+      "serpro": "concluido",
+      "detran": "concluido",
+      "renave": "concluido",
+      "id": 1777736832665
+    }
+  ],
+  "transactions": [],
+  "lastUpdate": "2026-05-02T16:32:15.614Z"
+}
