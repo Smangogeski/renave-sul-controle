@@ -1,3 +1,4 @@
+console.log('Tentando carregar Store.js...');
 /**
  * Store logic for Renave Sul - Supabase Edition
  * Handles communication with the Supabase Cloud Database
@@ -87,3 +88,4 @@ window.Store = {
         }
     }
 };
+console.log('Store.js carregado com sucesso.');

@@ -1,3 +1,4 @@
+console.log('Tentando carregar App.js...');
 /**
  * App Logic for Renave Sul
  */
@@ -5,23 +6,29 @@ window.App = {
     currentView: 'dashboard',
 
     async init() {
+        console.log('Iniciando App.init()...');
         try {
             this.checkAuth();
-            await Store.init();
+            if (!window.Store) {
+                throw new Error('O arquivo de banco de dados (Store.js) não foi carregado pelo navegador.');
+            }
+            await window.Store.init();
             this.cacheDOM();
             this.bindEvents();
             await this.render();
             lucide.createIcons();
+            console.log('App inicializado com sucesso!');
         } catch (error) {
             console.error('Erro crítico na inicialização:', error);
             document.body.innerHTML = `
-                <div style="padding: 2rem; text-align: center; font-family: sans-serif;">
+                <div style="padding: 2rem; text-align: center; font-family: sans-serif; background: #fff; height: 100vh;">
                     <h1 style="color: #ef4444;">Ops! O sistema não carregou.</h1>
-                    <p>Isso geralmente acontece quando as chaves do Supabase estão incorretas ou as tabelas não foram criadas.</p>
-                    <p style="font-size: 0.8rem; color: #666; background: #eee; padding: 1rem; border-radius: 8px; margin-top: 1rem;">
-                        Erro detectado: ${error.message}
-                    </p>
-                    <button onclick="location.reload()" style="margin-top: 1rem; padding: 0.5rem 1rem; cursor: pointer;">Tentar Novamente</button>
+                    <p>Isso geralmente acontece quando os arquivos não são carregados na ordem correta ou há um erro de conexão.</p>
+                    <div style="font-size: 0.9rem; color: #666; background: #f8f9fa; padding: 1.5rem; border-radius: 8px; margin: 2rem auto; max-width: 500px; text-align: left; border-left: 4px solid #ef4444;">
+                        <strong>Detalhes do Erro:</strong><br>
+                        ${error.message}
+                    </div>
+                    <button onclick="location.reload()" style="margin-top: 1rem; padding: 0.75rem 1.5rem; cursor: pointer; background: var(--accent-primary, #f38b3c); color: white; border: none; border-radius: 6px; font-weight: bold;">Tentar Novamente</button>
                 </div>
             `;
         }
@@ -33,20 +40,20 @@ window.App = {
         const appContainer = document.querySelector('.app-container');
 
         if (isLoggedIn) {
-            loginScreen.style.display = 'none';
-            appContainer.style.display = 'flex';
+            if (loginScreen) loginScreen.style.display = 'none';
+            if (appContainer) appContainer.style.display = 'flex';
         } else {
-            loginScreen.style.display = 'flex';
-            appContainer.style.display = 'none';
+            if (loginScreen) loginScreen.style.display = 'flex';
+            if (appContainer) appContainer.style.display = 'none';
             this.bindLoginEvents();
         }
     },
 
     bindLoginEvents() {
-        const form = document.getElementById('login-form');
-        const errorMsg = document.getElementById('login-error');
+        const loginForm = document.getElementById('login-form');
+        if (!loginForm) return;
 
-        form.onsubmit = (e) => {
+        loginForm.onsubmit = (e) => {
             e.preventDefault();
             const email = document.getElementById('login-email').value;
             const pass = document.getElementById('login-password').value;
@@ -54,107 +61,22 @@ window.App = {
             if (email === 'admin@renavesul.com.br' && pass === 'R3n@ve26') {
                 sessionStorage.setItem('renave_auth', 'true');
                 this.checkAuth();
+                this.render();
             } else {
-                errorMsg.style.display = 'block';
-                setTimeout(() => { errorMsg.style.display = 'none'; }, 3000);
+                const errorMsg = document.getElementById('login-error');
+                if (errorMsg) errorMsg.style.display = 'block';
             }
         };
-    },
-
-    fileHandle: null,
-
-    async requestFileSystemAccess() {
-        try {
-            // Se já tivermos um vínculo, tentamos usá-lo (o navegador pedirá permissão)
-            if (!this.fileHandle) {
-                this.fileHandle = await window.showSaveFilePicker({
-                    suggestedName: 'renave_sul_database.json',
-                    types: [{
-                        description: 'Arquivo de Dados JSON',
-                        accept: {'application/json': ['.json']},
-                    }],
-                });
-            }
-
-            // Garante que temos permissão de escrita
-            const options = { mode: 'readwrite' };
-            if ((await this.fileHandle.queryPermission(options)) !== 'granted') {
-                if ((await this.fileHandle.requestPermission(options)) !== 'granted') {
-                    throw new Error('Permissão negada');
-                }
-            }
-
-            this.showToast('✅ Conexão com o arquivo restabelecida!');
-            this.updateSyncButton(true);
-            this.syncToDisk();
-        } catch (err) {
-            console.error('Erro ao acessar arquivo:', err);
-            this.fileHandle = null;
-            this.updateSyncButton(false);
-        }
-    },
-
-    updateSyncButton(active) {
-        const btn = document.getElementById('sync-btn');
-        if (active) {
-            btn.style.color = 'var(--success)';
-            btn.innerHTML = '<i data-lucide="refresh-cw"></i><span>Auto-Sync Ativo</span>';
-        } else {
-            btn.style.color = 'var(--accent-primary)';
-            btn.innerHTML = '<i data-lucide="shield-check"></i><span>Reativar Sync</span>';
-        }
-        lucide.createIcons();
-    },
-
-    async syncToDisk() {
-        if (!this.fileHandle) return;
-        
-        try {
-            const fullData = {
-                tasks: Store.get(Store.KEYS.TASKS),
-                clients: Store.get(Store.KEYS.CLIENTS),
-                registrations: Store.get(Store.KEYS.REGISTRATIONS),
-                transactions: Store.get(Store.KEYS.TRANSACTIONS),
-                lastUpdate: new Date().toISOString()
-            };
-
-            // Criamos o writable com a opção de NÃO manter dados antigos (sobrescrita total)
-            const writable = await this.fileHandle.createWritable({ keepExistingData: false });
-            await writable.write(JSON.stringify(fullData, null, 2));
-            await writable.close();
-        } catch (err) {
-            console.error('Erro na sincronização:', err);
-        }
-    },
-
-    exportToJSON() {
-        const fullData = {
-            tasks: Store.get(Store.KEYS.TASKS),
-            clients: Store.get(Store.KEYS.CLIENTS),
-            registrations: Store.get(Store.KEYS.REGISTRATIONS),
-            transactions: Store.get(Store.KEYS.TRANSACTIONS),
-            exportDate: new Date().toISOString()
-        };
-
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(fullData, null, 2));
-        const downloadAnchorNode = document.createElement('a');
-        downloadAnchorNode.setAttribute("href", dataStr);
-        downloadAnchorNode.setAttribute("download", `renave_sul_backup_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.json`);
-        document.body.appendChild(downloadAnchorNode);
-        downloadAnchorNode.click();
-        downloadAnchorNode.remove();
-        
-        this.showToast('Backup JSON gerado com sucesso!');
     },
 
     cacheDOM() {
+        this.navItems = document.querySelectorAll('.sidebar-nav li[data-view]');
         this.viewContainer = document.getElementById('view-container');
-        this.navItems = document.querySelectorAll('.sidebar-nav li');
-        this.quickAddBtn = document.getElementById('btn-quick-add');
         this.modalOverlay = document.getElementById('modal-container');
-        this.closeModalBtn = document.getElementById('close-modal');
-        this.modalBody = document.getElementById('modal-body');
         this.modalTitle = document.getElementById('modal-title');
+        this.modalBody = document.getElementById('modal-body');
+        this.closeModalBtn = document.getElementById('close-modal');
+        this.quickAddBtn = document.getElementById('btn-quick-add');
         this.alertBadge = document.getElementById('alert-count');
     },
 
@@ -202,9 +124,204 @@ window.App = {
         });
     },
 
+    async render() {
+        if (this.currentView === 'dashboard') await this.renderDashboard();
+        else if (this.currentView === 'tasks') await this.renderTasks();
+        else if (this.currentView === 'finance') await this.renderFinance();
+        else if (this.currentView === 'clients') await this.renderClients();
+        else if (this.currentView === 'registrations') await this.renderRegistrations();
+        
+        lucide.createIcons();
+        this.updateAlertCount();
+    },
+
+    // --- Renderers ---
+
+    async renderDashboard() {
+        const tasks = (await window.Store.get(window.Store.TABLES.TASKS)) || [];
+        const regs = (await window.Store.get(window.Store.TABLES.REGISTRATIONS)) || [];
+        const transactions = (await window.Store.get(window.Store.TABLES.TRANSACTIONS)) || [];
+
+        const pendingTasks = tasks.length > 0 ? tasks.filter(t => t.status === 'pendente').length : 0;
+        const overdueTasks = tasks.length > 0 ? tasks.filter(t => new Date(t.deadline) < new Date() && t.status !== 'concluido').length : 0;
+        
+        const ongoingRegistrations = regs.length > 0 ? regs.filter(r => 
+            r.serpro !== 'concluido' || r.detran !== 'concluido' || r.renave !== 'concluido'
+        ).length : 0;
+
+        this.viewContainer.innerHTML = `
+            <div class="dashboard-header" style="margin-bottom: 2rem;">
+                <h1>Bem-vindo, Gestor</h1>
+                <p>Aqui está o resumo operacional da Renave Sul hoje.</p>
+            </div>
+
+            <div class="dashboard-grid">
+                <div class="kpi-card">
+                    <span class="label">Tarefas Pendentes</span>
+                    <span class="value">${pendingTasks}</span>
+                    <span class="trend up"><i data-lucide="clock"></i> Aguardando ação</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="label">Processos Atrasados</span>
+                    <span class="value" style="color: var(--danger);">${overdueTasks}</span>
+                    <span class="trend down"><i data-lucide="alert-triangle"></i> Requer atenção</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="label">Total de Clientes</span>
+                    <span class="value">${regs.length}</span>
+                    <span class="trend" style="color: var(--accent-primary);"><i data-lucide="users"></i> Na base</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="label">Cadastros em Andamento</span>
+                    <span class="value">${ongoingRegistrations}</span>
+                    <span class="trend" style="color: var(--accent-primary);"><i data-lucide="loader"></i> Em fluxo</span>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 2rem; margin-top: 2rem;">
+                <div class="card">
+                    <div class="section-header">
+                        <h2>Ações Necessárias</h2>
+                    </div>
+                    <div class="card">
+                        <ul class="action-list">
+                            ${tasks.length > 0 ? tasks.slice(0, 3).map(task => `
+                                <li class="action-item">
+                                    <div class="status-indicator ${task.status}"></div>
+                                    <div class="action-details">
+                                        <span class="title">${task.title}</span>
+                                        <span class="meta">${task.deadline} • ${task.responsible}</span>
+                                    </div>
+                                    <span class="priority-tag ${task.priority}">${task.priority}</span>
+                                </li>
+                            `).join('') : '<li class="action-item">Nenhuma tarefa pendente</li>'}
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="section-header">
+                        <h2>Crescimento Mensal</h2>
+                    </div>
+                    <div style="height: 250px;">
+                        <canvas id="monthlyChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Initialize Chart
+        setTimeout(() => App.initDashboardChart(), 0);
+    },
+
+    async initDashboardChart() {
+        const ctx = document.getElementById('monthlyChart');
+        if (!ctx) return;
+
+        const regs = await window.Store.get(window.Store.TABLES.REGISTRATIONS);
+        const history = App.getMonthlyHistory(regs);
+        
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: history.map(h => h.month),
+                datasets: [{
+                    label: 'Novos Clientes',
+                    data: history.map(h => h.count),
+                    backgroundColor: '#f38b3c',
+                    borderRadius: 6,
+                    borderSkipped: false,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { stepSize: 1 }
+                    },
+                    x: {
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+    },
+
+    calculateMonthlyAverage(regs) {
+        if (regs.length === 0) return 0;
+        const months = new Set(regs.map(r => r.created_at ? r.created_at.substring(0, 7) : '')).size;
+        return (regs.length / (months || 1)).toFixed(1);
+    },
+
+    getMonthlyHistory(regs) {
+        const history = {};
+        regs.forEach(r => {
+            if (!r.created_at) return;
+            const month = r.created_at.substring(0, 7); // YYYY-MM
+            history[month] = (history[month] || 0) + 1;
+        });
+        
+        return Object.entries(history).map(([month, count]) => {
+            const [year, m] = month.split('-');
+            const date = new Date(year, m - 1);
+            const monthName = date.toLocaleString('pt-br', { month: 'long', year: 'numeric' });
+            return { month: monthName, count };
+        });
+    },
+
+    async renderTasks() {
+        const tasks = await window.Store.get(window.Store.TABLES.TASKS);
+        this.viewContainer.innerHTML = `
+            <div class="section-header">
+                <h1>Gestão de Tarefas</h1>
+                <button class="btn btn-primary" onclick="App.showAddTask()">
+                    <i data-lucide="plus"></i> Adicionar Tarefa
+                </button>
+            </div>
+            <div class="card">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Título</th>
+                            <th>Responsável</th>
+                            <th>Prazo</th>
+                            <th>Prioridade</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${tasks.map(task => `
+                            <tr>
+                                <td><strong>${task.title}</strong></td>
+                                <td>${task.responsible}</td>
+                                <td>${task.deadline}</td>
+                                <td><span class="tag priority-${task.priority}">${task.priority}</span></td>
+                                <td><span class="tag status-${task.status}">${task.status}</span></td>
+                                <td>
+                                    <button class="btn btn-icon" onclick="App.showEditTask(${task.id})" title="Editar Tarefa">
+                                        <i data-lucide="edit-3"></i>
+                                    </button>
+                                    <button class="btn btn-icon" onclick="App.deleteTask(${task.id})" title="Excluir">
+                                        <i data-lucide="trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    },
+
     async renderFinance() {
-        const transactions = await Store.get(Store.TABLES.TRANSACTIONS);
-        const regs = await Store.get(Store.TABLES.REGISTRATIONS);
+        const transactions = await window.Store.get(window.Store.TABLES.TRANSACTIONS);
+        const regs = await window.Store.get(window.Store.TABLES.REGISTRATIONS);
         
         // Cálculos
         const totalRevenue = transactions.filter(t => t.type === 'entry').reduce((acc, t) => acc + parseFloat(t.value), 0);
@@ -305,433 +422,33 @@ window.App = {
         `;
     },
 
-    showAddTransaction() {
-        const regs = Store.get(Store.KEYS.REGISTRATIONS);
-        this.modalTitle.innerText = 'Novo Lançamento Financeiro';
-        this.modalBody.innerHTML = `
-            <form id="add-trans-form">
-                <div class="form-group">
-                    <label>Tipo de Lançamento</label>
-                    <select class="form-control" id="trans-type" onchange="App.toggleFinanceFields(this.value)">
-                        <option value="entry">Entrada (Receita de Cliente)</option>
-                        <option value="exit">Saída (Despesa Operacional)</option>
-                    </select>
-                </div>
-
-                <!-- Campos de ENTRADA -->
-                <div id="entry-fields">
-                    <div class="form-group">
-                        <label>Loja / Cliente</label>
-                        <select class="form-control" id="trans-store-id">
-                            ${regs.map(r => `<option value="${r.id}">${r.storeName}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Mês de Referência</label>
-                        <input type="month" class="form-control" id="trans-ref-month" value="${new Date().toISOString().substring(0, 7)}">
-                    </div>
-                </div>
-
-                <!-- Campos de SAÍDA -->
-                <div id="exit-fields" style="display: none;">
-                    <div class="form-group">
-                        <label>Categoria da Despesa</label>
-                        <select class="form-control" id="trans-category">
-                            <option value="Combustível">Combustível</option>
-                            <option value="Alimentação">Alimentação</option>
-                            <option value="Impostos">Impostos</option>
-                            <option value="Contabilidade">Contabilidade</option>
-                            <option value="Outros">Outros (Diversos)</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>Valor (R$)</label>
-                    <input type="number" step="0.01" class="form-control" id="trans-value" required>
-                </div>
-
-                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Confirmar Lançamento</button>
-            </form>
-        `;
-        this.showModal();
-
-        document.getElementById('add-trans-form').onsubmit = (e) => {
-            e.preventDefault();
-            const type = document.getElementById('trans-type').value;
-            let description = '';
-            let storeId = null;
-
-            if (type === 'entry') {
-                const storeSelect = document.getElementById('trans-store-id');
-                const storeName = storeSelect.options[storeSelect.selectedIndex].text;
-                const refMonth = document.getElementById('trans-ref-month').value;
-                description = `Mensalidade de ${storeName} referente a ${refMonth}`;
-                storeId = parseInt(storeSelect.value);
-            } else {
-                description = document.getElementById('trans-category').value;
-            }
-
-            Store.addItem(Store.KEYS.TRANSACTIONS, {
-                storeId: storeId,
-                date: new Date().toISOString().split('T')[0],
-                desc: description,
-                value: parseFloat(document.getElementById('trans-value').value),
-                type: type
-            });
-            App.hideModal();
-            App.render();
-            App.showToast('Lançamento padronizado registrado!');
-        };
-    },
-
-    toggleFinanceFields(type) {
-        const entryFields = document.getElementById('entry-fields');
-        const exitFields = document.getElementById('exit-fields');
-        if (type === 'entry') {
-            entryFields.style.display = 'block';
-            exitFields.style.display = 'none';
-        } else {
-            entryFields.style.display = 'none';
-            exitFields.style.display = 'block';
-        }
-    },
-
-    renderClients() {
-        const clients = Store.get(Store.KEYS.CLIENTS);
+    async renderClients() {
+        const clients = await window.Store.get(window.Store.TABLES.CLIENTS);
         this.viewContainer.innerHTML = `
             <div class="section-header">
-                <h1>Controle de Clientes</h1>
+                <h1>Clientes Cadastrados</h1>
                 <button class="btn btn-primary" onclick="App.showAddClient()">
                     <i data-lucide="user-plus"></i> Novo Cliente
                 </button>
             </div>
-            <div class="grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem;">
-                ${clients.map(client => `
-                    <div class="card client-card">
-                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
-                            <div class="avatar">${client.name.substring(0,2).toUpperCase()}</div>
-                            <div>
-                                <h3 style="font-size: 1rem;">${client.name}</h3>
-                                <span class="text-muted" style="font-size: 0.75rem;">${client.email}</span>
-                            </div>
-                        </div>
-                        <div style="font-size: 0.875rem; color: var(--text-secondary);">
-                            <p><i data-lucide="phone" style="width: 14px;"></i> ${client.phone}</p>
-                        </div>
-                        <hr style="border: 0; border-top: 1px solid var(--bg-tertiary); margin: 1rem 0;">
-                        <button class="btn btn-icon" style="width: 100%;">Ver Histórico</button>
-                    </div>
-                `).join('')}
-            </div>
-        `;
-    },
-
-    renderRegistrations() {
-        const regs = Store.get(Store.KEYS.REGISTRATIONS);
-        
-        const statuses = [
-            { id: 'nao-iniciada', label: 'Não Iniciada' },
-            { id: 'iniciada', label: 'Iniciada' },
-            { id: 'analise', label: 'Análise' },
-            { id: 'concluido', label: 'Concluído' }
-        ];
-
-        this.viewContainer.innerHTML = `
-            <div class="section-header">
-                <div>
-                    <h1>Cadastros e Credenciamentos</h1>
-                    <p class="text-secondary">Controle de situação por etapa</p>
-                </div>
-                <button class="btn btn-primary" onclick="App.showAddRegistration()">
-                    <i data-lucide="plus"></i> Novo Cadastro de Loja
-                </button>
-            </div>
             <div class="card">
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Loja / Estabelecimento</th>
-                            <th style="text-align: center;">1. SERPRO (Situação)</th>
-                            <th style="text-align: center;">2. Detran/RS (Situação)</th>
-                            <th style="text-align: center;">3. Renave Sul (Acesso)</th>
-                            <th style="text-align: right;">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${regs.map(reg => {
-                            const getStatusTag = (status) => {
-                                const map = {
-                                    'nao-iniciada': { label: 'Pendente', class: 'status-nao-iniciada' },
-                                    'iniciada': { label: 'Iniciada', class: 'status-iniciada' },
-                                    'analise': { label: 'Análise', class: 'status-analise' },
-                                    'concluido': { label: 'Concluído', class: 'status-concluido' }
-                                };
-                                const info = map[status] || { label: status, class: '' };
-                                return `<span class="tag ${info.class}">${info.label}</span>`;
-                            };
-
-                            return `
-                                <tr>
-                                    <td>
-                                        <div style="display: flex; flex-direction: column;">
-                                            <strong>${reg.storeName}</strong>
-                                            <span style="font-size: 0.7rem; color: var(--text-muted);">${reg.revCode || 'Sem Registro'}</span>
-                                        </div>
-                                    </td>
-                                    <td align="center">${getStatusTag(reg.serpro)}</td>
-                                    <td align="center">${getStatusTag(reg.detran)}</td>
-                                    <td align="center">
-                                        <span class="tag ${reg.renave === 'concluido' ? 'status-concluido' : 'status-nao-iniciada'}">
-                                            ${reg.renave === 'concluido' ? 'ATIVO' : 'INATIVO'}
-                                        </span>
-                                    </td>
-                                    <td align="right">
-                                        <button class="btn btn-icon" onclick="App.showEditRegistration(${reg.id})" title="Editar Detalhes e Situação">
-                                            <i data-lucide="edit-3"></i>
-                                        </button>
-                                        <button class="btn btn-icon" onclick="App.deleteRegistration(${reg.id})" title="Excluir">
-                                            <i data-lucide="trash"></i>
-                                        </button>
-                                    </td>
-                                </tr>
-                            `;
-                        }).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-    },
-
-    updateStageStatus(id, stage, value) {
-        const regs = Store.get(Store.KEYS.REGISTRATIONS);
-        const index = regs.findIndex(r => r.id === id);
-        if (index === -1) return;
-        
-        regs[index][stage] = value;
-        Store.save(Store.KEYS.REGISTRATIONS, regs);
-        this.render();
-        this.showToast('Situação atualizada');
-    },
-
-    toggleRenaveStatus(id, checked) {
-        const regs = Store.get(Store.KEYS.REGISTRATIONS);
-        const index = regs.findIndex(r => r.id === id);
-        if (index === -1) return;
-        
-        regs[index].renave = checked ? 'concluido' : 'nao-iniciada';
-        Store.save(Store.KEYS.REGISTRATIONS, regs);
-        this.render();
-        this.showToast(checked ? 'Loja Ativada na Renave' : 'Loja Inativada na Renave');
-    },
-
-    async render() {
-        this.viewContainer.innerHTML = '<div style="display:flex; justify-content:center; padding: 2rem; color: var(--accent-primary);">Carregando dados da nuvem...</div>';
-        
-        switch (this.currentView) {
-            case 'dashboard':
-                await this.renderDashboard();
-                // Initialize chart after DOM is updated
-                setTimeout(() => App.initDashboardChart(), 0);
-                break;
-            case 'tasks':
-                await this.renderTasks();
-                break;
-            case 'finance':
-                await this.renderFinance();
-                break;
-            case 'clients':
-                await this.renderClients();
-                break;
-            case 'registrations':
-                await this.renderRegistrations();
-                break;
-        }
-        
-        this.updateAlertCount();
-        lucide.createIcons();
-        
-        // Auto-sync ao disco se estiver ativo
-        if (this.fileHandle) {
-            this.syncToDisk();
-        }
-    },
-
-    // --- Renderers ---
-
-    async renderDashboard() {
-        const tasks = (await Store.get(Store.TABLES.TASKS)) || [];
-        const regs = (await Store.get(Store.TABLES.REGISTRATIONS)) || [];
-        const transactions = (await Store.get(Store.TABLES.TRANSACTIONS)) || [];
-
-        const pendingTasks = tasks.length > 0 ? tasks.filter(t => t.status === 'pendente').length : 0;
-        const overdueTasks = tasks.length > 0 ? tasks.filter(t => new Date(t.deadline) < new Date() && t.status !== 'concluido').length : 0;
-        
-        const ongoingRegistrations = regs.length > 0 ? regs.filter(r => 
-            r.serpro !== 'concluido' || r.detran !== 'concluido' || r.renave !== 'concluido'
-        ).length : 0;
-
-        this.viewContainer.innerHTML = `
-            <div class="dashboard-header" style="margin-bottom: 2rem;">
-                <nav class="breadcrumbs" style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
-                    Painel de Controle > Dashboard
-                </nav>
-                <h1 style="font-size: 2rem; font-weight: 800; color: var(--text-primary);">Dashboard Operacional</h1>
-            </div>
-
-            <div class="dashboard-grid">
-                <div class="kpi-card">
-                    <span class="label">Tarefas Pendentes</span>
-                    <span class="value">${pendingTasks}</span>
-                    <span class="trend" style="color: var(--accent-primary);"><i data-lucide="activity"></i> Em dia</span>
-                </div>
-                <div class="kpi-card">
-                    <span class="label">Pendências Urgentes</span>
-                    <span class="value" style="color: var(--danger);">${overdueTasks}</span>
-                    <span class="trend down"><i data-lucide="alert-triangle"></i> Requer atenção</span>
-                </div>
-                <div class="kpi-card">
-                    <span class="label">Total de Clientes</span>
-                    <span class="value">${regs.length}</span>
-                    <span class="trend" style="color: var(--accent-primary);"><i data-lucide="users"></i> Na base</span>
-                </div>
-                <div class="kpi-card">
-                    <span class="label">Cadastros em Andamento</span>
-                    <span class="value" style="color: var(--accent-primary);">${ongoingRegistrations}</span>
-                    <span class="trend"><i data-lucide="refresh-cw"></i> Sincronizado com Cadastros</span>
-                </div>
-            </div>
-
-            <div class="dashboard-sections" style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
-                <div class="section">
-                    <div class="section-header">
-                        <h2>Próximas Ações (Tarefas)</h2>
-                    </div>
-                    <div class="card">
-                        <ul class="action-list">
-                            ${tasks.length > 0 ? tasks.slice(0, 3).map(task => `
-                                <li class="action-item">
-                                    <div class="status-indicator ${task.status}"></div>
-                                    <div class="action-details">
-                                        <span class="title">${task.title}</span>
-                                        <span class="meta">${task.deadline} • ${task.responsible}</span>
-                                    </div>
-                                    <span class="priority-tag ${task.priority}">${task.priority}</span>
-                                </li>
-                            `).join('') : '<li class="action-item">Nenhuma tarefa pendente</li>'}
-                        </ul>
-                    </div>
-                </div>
-
-                <div class="section">
-                    <div class="section-header">
-                        <h2>Crescimento Mensal</h2>
-                        <span style="font-size: 0.75rem; color: var(--success); font-weight: 700;">Média: ${App.calculateMonthlyAverage(regs)}/mês</span>
-                    </div>
-                    <div class="card">
-                        <canvas id="monthlyChart" height="150"></canvas>
-                    </div>
-                </div>
-            </div>
-        `;
-    },
-
-    async initDashboardChart() {
-        const ctx = document.getElementById('monthlyChart');
-        if (!ctx) return;
-
-        const regs = await Store.get(Store.TABLES.REGISTRATIONS);
-        const history = App.getMonthlyHistory(regs);
-        
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: history.map(h => h.month),
-                datasets: [{
-                    label: 'Novos Clientes',
-                    data: history.map(h => h.count),
-                    backgroundColor: '#f38b3c',
-                    borderRadius: 6,
-                    borderSkipped: false,
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: { stepSize: 1 }
-                    },
-                    x: {
-                        grid: { display: false }
-                    }
-                }
-            }
-        });
-    },
-
-    calculateMonthlyAverage(regs) {
-        if (regs.length === 0) return 0;
-        const months = new Set(regs.map(r => r.createdAt ? r.createdAt.substring(0, 7) : '')).size;
-        return (regs.length / (months || 1)).toFixed(1);
-    },
-
-    getMonthlyHistory(regs) {
-        const history = {};
-        regs.forEach(r => {
-            if (!r.createdAt) return;
-            const month = r.createdAt.substring(0, 7); // YYYY-MM
-            history[month] = (history[month] || 0) + 1;
-        });
-        
-        return Object.entries(history).map(([month, count]) => {
-            const [year, m] = month.split('-');
-            const date = new Date(year, m - 1);
-            const monthName = date.toLocaleString('pt-br', { month: 'long', year: 'numeric' });
-            return { month: monthName, count };
-        });
-    },
-
-    async renderTasks() {
-        const tasks = await Store.get(Store.TABLES.TASKS);
-        this.viewContainer.innerHTML = `
-            <div class="section-header">
-                <h1>Gestão de Tarefas</h1>
-                <button class="btn btn-primary" onclick="App.showAddTask()">
-                    <i data-lucide="plus"></i> Adicionar Tarefa
-                </button>
-            </div>
-            <div class="card">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Título</th>
-                            <th>Responsável</th>
-                            <th>Prazo</th>
-                            <th>Prioridade</th>
-                            <th>Status</th>
+                            <th>Nome</th>
+                            <th>E-mail</th>
+                            <th>Telefone</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${tasks.map(task => `
+                        ${clients.map(c => `
                             <tr>
-                                <td><strong>${task.title}</strong></td>
-                                <td>${task.responsible}</td>
-                                <td>${task.deadline}</td>
-                                <td><span class="tag priority-${task.priority}">${task.priority}</span></td>
-                                <td><span class="tag status-${task.status}">${task.status}</span></td>
+                                <td><strong>${c.name}</strong></td>
+                                <td>${c.email || '-'}</td>
+                                <td>${c.phone || '-'}</td>
                                 <td>
-                                    <button class="btn btn-icon" onclick="App.showEditTask(${task.id})" title="Editar Tarefa">
-                                        <i data-lucide="edit-3"></i>
-                                    </button>
-                                    <button class="btn btn-icon" onclick="App.deleteTask(${task.id})" title="Excluir">
-                                        <i data-lucide="trash"></i>
-                                    </button>
+                                    <button class="btn btn-icon" onclick="App.deleteClient(${c.id})"><i data-lucide="trash"></i></button>
                                 </td>
                             </tr>
                         `).join('')}
@@ -770,7 +487,7 @@ window.App = {
             const title = document.getElementById('quick-title').value;
             
             if (type === 'task') {
-                await Store.addItem(Store.TABLES.TASKS, {
+                await window.Store.addItem(window.Store.TABLES.TASKS, {
                     title,
                     priority: 'media',
                     deadline: new Date().toISOString().split('T')[0],
@@ -778,7 +495,7 @@ window.App = {
                     status: 'pendente'
                 });
             } else if (type === 'client') {
-                await Store.addItem(Store.TABLES.CLIENTS, {
+                await window.Store.addItem(window.Store.TABLES.CLIENTS, {
                     name: title,
                     email: '',
                     phone: ''
@@ -813,7 +530,7 @@ window.App = {
         this.showModal();
         document.getElementById('add-client-form').onsubmit = async (e) => {
             e.preventDefault();
-            await Store.addItem(Store.TABLES.CLIENTS, {
+            await window.Store.addItem(window.Store.TABLES.CLIENTS, {
                 name: document.getElementById('client-name').value,
                 email: document.getElementById('client-email').value,
                 phone: document.getElementById('client-phone').value
@@ -826,7 +543,7 @@ window.App = {
 
     async deleteClient(id) {
         if (confirm('Excluir este cliente?')) {
-            await Store.deleteItem(Store.TABLES.CLIENTS, id);
+            await window.Store.deleteItem(window.Store.TABLES.CLIENTS, id);
             await this.render();
             this.showToast('Cliente removido');
         }
@@ -845,11 +562,21 @@ window.App = {
         const toast = document.createElement('div');
         toast.className = 'toast success';
         toast.innerText = msg;
-        document.getElementById('toast-container').appendChild(toast);
-        setTimeout(() => toast.remove(), 3000);
+        const container = document.getElementById('toast-container');
+        if (container) {
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
     },
 
-    showAddTask() {
+    async updateAlertCount() {
+        if (!window.Store) return;
+        const tasks = await window.Store.get(window.Store.TABLES.TASKS);
+        const overdue = tasks.filter(t => new Date(t.deadline) < new Date() && t.status !== 'concluido').length;
+        if (this.alertBadge) this.alertBadge.innerText = overdue;
+    },
+
+    async showAddTask() {
         this.modalTitle.innerText = 'Nova Tarefa';
         this.modalBody.innerHTML = `
             <form id="add-task-form">
@@ -883,7 +610,7 @@ window.App = {
         this.showModal();
         document.getElementById('add-task-form').onsubmit = async (e) => {
             e.preventDefault();
-            await Store.addItem(Store.TABLES.TASKS, {
+            await window.Store.addItem(window.Store.TABLES.TASKS, {
                 title: document.getElementById('task-title').value,
                 responsible: document.getElementById('task-responsible').value,
                 deadline: document.getElementById('task-deadline').value,
@@ -897,7 +624,7 @@ window.App = {
     },
 
     async showEditTask(id) {
-        const tasks = await Store.get(Store.TABLES.TASKS);
+        const tasks = await window.Store.get(window.Store.TABLES.TASKS);
         const task = tasks.find(t => t.id === id);
         if (!task) return;
 
@@ -947,7 +674,7 @@ window.App = {
 
         document.getElementById('edit-task-form').onsubmit = async (e) => {
             e.preventDefault();
-            await Store.updateItem(Store.TABLES.TASKS, id, {
+            await window.Store.updateItem(window.Store.TABLES.TASKS, id, {
                 title: document.getElementById('edit-task-title').value,
                 responsible: document.getElementById('edit-task-resp').value,
                 deadline: document.getElementById('edit-task-deadline').value,
@@ -963,16 +690,10 @@ window.App = {
 
     async deleteTask(id) {
         if (confirm('Deseja excluir esta tarefa?')) {
-            await Store.deleteItem(Store.TABLES.TASKS, id);
+            await window.Store.deleteItem(window.Store.TABLES.TASKS, id);
             await this.render();
             this.showToast('Tarefa excluída');
         }
-    },
-
-    async updateAlertCount() {
-        const tasks = await Store.get(Store.TABLES.TASKS);
-        const overdue = tasks.filter(t => new Date(t.deadline) < new Date() && t.status !== 'concluido').length;
-        this.alertBadge.innerText = overdue;
     },
 
     async showAddRegistration() {
@@ -1003,7 +724,7 @@ window.App = {
         this.showModal();
         document.getElementById('add-reg-form').onsubmit = async (e) => {
             e.preventDefault();
-            await Store.addItem(Store.TABLES.REGISTRATIONS, {
+            await window.Store.addItem(window.Store.TABLES.REGISTRATIONS, {
                 store_name: document.getElementById('reg-store-name').value,
                 rev_code: document.getElementById('reg-rev').value || 'REV',
                 detran_password: document.getElementById('reg-detran-pass').value,
@@ -1019,7 +740,7 @@ window.App = {
     },
 
     async renderRegistrations() {
-        const regs = await Store.get(Store.TABLES.REGISTRATIONS);
+        const regs = await window.Store.get(window.Store.TABLES.REGISTRATIONS);
         this.viewContainer.innerHTML = `
             <div class="section-header">
                 <h1>Cadastros e Pendências</h1>
@@ -1070,7 +791,7 @@ window.App = {
     },
 
     async showEditRegistration(id) {
-        const regs = await Store.get(Store.TABLES.REGISTRATIONS);
+        const regs = await window.Store.get(window.Store.TABLES.REGISTRATIONS);
         const reg = regs.find(r => r.id === id);
         if (!reg) return;
 
@@ -1132,7 +853,7 @@ window.App = {
 
         document.getElementById('edit-reg-form').onsubmit = async (e) => {
             e.preventDefault();
-            await Store.updateItem(Store.TABLES.REGISTRATIONS, id, {
+            await window.Store.updateItem(window.Store.TABLES.REGISTRATIONS, id, {
                 rev_code: document.getElementById('edit-rev').value,
                 detran_password: document.getElementById('edit-detran-pass').value,
                 serpro_password: document.getElementById('edit-serpro-pass').value,
@@ -1148,14 +869,14 @@ window.App = {
 
     async deleteRegistration(id) {
         if (confirm('Deseja excluir este registro de loja?')) {
-            await Store.deleteItem(Store.TABLES.REGISTRATIONS, id);
+            await window.Store.deleteItem(window.Store.TABLES.REGISTRATIONS, id);
             await this.render();
             this.showToast('Registro removido');
         }
     },
 
     async showAddTransaction() {
-        const regs = await Store.get(Store.TABLES.REGISTRATIONS);
+        const regs = await window.Store.get(window.Store.TABLES.REGISTRATIONS);
         this.modalTitle.innerText = 'Novo Lançamento Financeiro';
         this.modalBody.innerHTML = `
             <form id="add-trans-form">
@@ -1221,7 +942,7 @@ window.App = {
                 description = document.getElementById('trans-category').value;
             }
 
-            await Store.addItem(Store.TABLES.TRANSACTIONS, {
+            await window.Store.addItem(window.Store.TABLES.TRANSACTIONS, {
                 store_id: storeId,
                 date: new Date().toISOString().split('T')[0],
                 description: description,
@@ -1232,6 +953,18 @@ window.App = {
             await App.render();
             App.showToast('Lançamento registrado na nuvem!');
         };
+    },
+
+    toggleFinanceFields(type) {
+        const entryFields = document.getElementById('entry-fields');
+        const exitFields = document.getElementById('exit-fields');
+        if (type === 'entry') {
+            entryFields.style.display = 'block';
+            exitFields.style.display = 'none';
+        } else {
+            entryFields.style.display = 'none';
+            exitFields.style.display = 'block';
+        }
     },
 };
 
