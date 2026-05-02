@@ -4,14 +4,15 @@
 const App = {
     currentView: 'dashboard',
 
-    init() {
-        // Modo Direto: Abre o painel sem login
+    async init() {
+        // Pular login (Requisito usuário)
         const loginScreen = document.getElementById('login-screen');
         const appContainer = document.querySelector('.app-container');
         if (loginScreen) loginScreen.style.display = 'none';
         if (appContainer) appContainer.style.display = 'flex';
 
-        Store.init();
+        await Store.init();
+        
         this.cacheDOM();
         this.bindEvents();
         this.render();
