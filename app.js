@@ -110,6 +110,7 @@ window.App = {
 
         loginForm.onsubmit = async (e) => {
             e.preventDefault();
+            alert('Tentando acessar com: ' + document.getElementById('login-email').value);
             console.log('Tentativa de login...');
             const email = document.getElementById('login-email').value.trim();
             const pass = document.getElementById('login-password').value.trim();
