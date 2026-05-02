@@ -18,7 +18,7 @@ try {
     console.error('Falha ao instanciar Supabase:', e);
 }
 
-const Store = {
+window.Store = {
     // Tabelas no Supabase
     TABLES: {
         TASKS: 'tasks',

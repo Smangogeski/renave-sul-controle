@@ -1,7 +1,7 @@
 /**
  * App Logic for Renave Sul
  */
-const App = {
+window.App = {
     currentView: 'dashboard',
 
     async init() {
@@ -1235,5 +1235,15 @@ const App = {
     },
 };
 
-// Start the app
-window.onload = () => App.init();
+// Start the app with a small delay to ensure Store is ready
+window.onload = () => {
+    setTimeout(() => {
+        if (window.Store) {
+            App.init();
+        } else {
+            console.error('Store ainda não foi carregado.');
+            // Tenta novamente em 500ms se falhar
+            setTimeout(() => App.init(), 500);
+        }
+    }, 100);
+};
