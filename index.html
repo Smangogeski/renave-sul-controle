@@ -3,124 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Renave Sul | Painel de Gestão</title>
+    <title>Renave Sul | Gestão Cloud</title>
     <link rel="stylesheet" href="style.css">
-    <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Supabase JS -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="light-theme">
-    <!-- Login Screen -->
-    <div id="login-screen" class="login-overlay">
-        <div class="login-card">
-            <div class="login-header">
-                <div class="logo">
-                    <div class="logo-icon">RS</div>
-                    <span class="logo-text">RENAVE<span>SUL</span></span>
-                </div>
-                <p>Gestão Administrativa - <span style="color: #10b981; font-weight: bold;">v2.0 Cloud</span></p>
-            </div>
-            <form id="login-form">
-                <div class="form-group">
-                    <label>E-mail</label>
-                    <input type="email" id="login-email" class="form-control" placeholder="admin@renave-sul.com.br" required>
-                </div>
-                <div class="form-group">
-                    <label>Senha</label>
-                    <input type="password" id="login-password" class="form-control" placeholder="••••••••" required>
-                </div>
-                <div id="login-error" class="error-message" style="display: none; color: var(--danger); font-size: 0.8rem; margin-bottom: 1rem; text-align: center;">
-                    E-mail ou senha incorretos.
-                </div>
-                <button type="submit" class="btn btn-primary" style="width: 100%; height: 48px; font-weight: 700;">Acessar Sistema</button>
-            </form>
-            <div class="login-footer">
-                &copy; 2026 Renave Sul - Todos os direitos reservados.
-            </div>
-        </div>
-    </div>
+    <!-- Login Overlay -->
+    <div id="login-screen" class="login-overlay" style="display:none;"></div>
 
-    <div id="sidebar-overlay" class="sidebar-overlay"></div>
-    <div class="app-container" style="display: none;">
-        <!-- Sidebar Navigation -->
+    <div id="sidebar-overlay" class="overlay"></div>
+    
+    <div class="app-wrapper" style="display:flex;">
         <aside class="sidebar">
-            <div class="sidebar-header">
+            <div class="sidebar-brand">
                 <div class="logo">
-                    <div class="logo-icon" style="background: var(--accent-primary); width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white;">
-                        <i data-lucide="refresh-cw"></i>
-                    </div>
-                    <div class="logo-text" style="display: flex; flex-direction: column; line-height: 1;">
-                        <span style="color: var(--accent-primary); font-size: 1.1rem; font-weight: 800;">RENAVE</span>
-                        <span style="color: var(--text-secondary); font-size: 0.9rem; font-weight: 600;">SUL</span>
-                    </div>
+                    <div class="logo-icon small">RS</div>
+                    <span class="logo-text small">RENAVE<span>SUL</span></span>
                 </div>
             </div>
             <nav class="sidebar-nav">
                 <ul>
-                    <li class="active" data-view="dashboard">
-                        <i data-lucide="layout-dashboard"></i>
-                        <span>Painel de Controle</span>
-                    </li>
-                    <li data-view="tasks">
-                        <i data-lucide="check-square"></i>
-                        <span>Minhas Tarefas</span>
-                    </li>
-                    <li data-view="finance">
-                        <i data-lucide="dollar-sign"></i>
-                        <span>Área Financeira</span>
-                    </li>
-                    <li data-view="clients">
-                        <i data-lucide="users"></i>
-                        <span>Consultar Clientes</span>
-                    </li>
-                    <li data-view="registrations">
-                        <i data-lucide="file-text"></i>
-                        <span>Cadastros e Pendências</span>
-                    </li>
+                    <li class="active" data-view="dashboard"><i data-lucide="layout-dashboard"></i> <span>Dashboard</span></li>
+                    <li data-view="tasks"><i data-lucide="check-circle"></i> <span>Tarefas</span></li>
+                    <li data-view="finance"><i data-lucide="dollar-sign"></i> <span>Finanças</span></li>
+                    <li data-view="clients"><i data-lucide="users"></i> <span>Clientes</span></li>
+                    <li data-view="registrations"><i data-lucide="file-text"></i> <span>Processos</span></li>
                 </ul>
             </nav>
             <div class="sidebar-footer">
-                <div class="user-info">
-                    <div class="avatar">GS</div>
-                    <div class="details">
-                        <span class="name">Gestor</span>
-                        <span class="role">Administrador</span>
-                    </div>
-                </div>
+                <button class="btn-logout" onclick="window.App.logout()"><i data-lucide="log-out"></i> Sair</button>
             </div>
         </aside>
 
-        <!-- Main Content -->
         <main class="main-content">
-            <header class="top-bar">
-                <button class="btn btn-icon mobile-menu-toggle" id="mobile-menu-toggle">
-                    <i data-lucide="menu"></i>
-                </button>
-                <div class="search-bar">
+            <header class="top-nav">
+                <button id="mobile-toggle" class="btn-icon"><i data-lucide="menu"></i></button>
+                <div class="search-box">
                     <i data-lucide="search"></i>
-                    <input type="text" id="global-search" placeholder="Buscar tarefas, clientes ou processos...">
+                    <input type="text" placeholder="Buscar no sistema...">
                 </div>
-                <div class="top-actions">
-                    <button class="btn btn-primary" id="btn-quick-add">
-                        <i data-lucide="plus"></i>
-                        <span>Novo</span>
-                    </button>
-                    <button class="btn btn-icon notification-btn">
-                        <i data-lucide="bell"></i>
-                        <span class="badge" id="alert-count">0</span>
-                    </button>
+                <div class="user-profile">
+                    <span id="system-status" class="status-dot"></span>
+                    <div class="avatar">GS</div>
                 </div>
             </header>
 
-            <div id="view-container">
-                <!-- Content will be injected here via JS -->
+            <div id="view-container" class="content-body">
+                <!-- Views injected here -->
             </div>
         </main>
     </div>
@@ -128,20 +62,13 @@
     <!-- Modals -->
     <div id="modal-container" class="modal-overlay hidden">
         <div class="modal">
-            <header class="modal-header">
-                <h2 id="modal-title">Nova Tarefa</h2>
-                <button class="btn-close" id="close-modal">
-                    <i data-lucide="x"></i>
-                </button>
-            </header>
-            <div class="modal-body" id="modal-body">
-                <!-- Form content injected here -->
+            <div class="modal-header">
+                <h2 id="modal-title">Título</h2>
+                <button class="btn-icon" onclick="window.App.hideModal()"><i data-lucide="x"></i></button>
             </div>
+            <div id="modal-body" class="modal-body"></div>
         </div>
     </div>
-
-    <!-- Notifications Toast -->
-    <div id="toast-container" class="toast-container"></div>
 
     <script src="app.js"></script>
 </body>
